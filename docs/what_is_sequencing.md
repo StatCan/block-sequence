@@ -6,7 +6,7 @@ as a listing unit (LU) or collection unit (CU). By ordering the block faces (BF)
 the total distance travelled, lessening the chances of backtracking or doubling over streets that have already been checked. An 
 example of a start point and route in shown in the figure below.
 
-
+![An asterisk indicates the start point for the enumerator, then they follow the road using the right hand rule.](sequence_diagram.png)
 
 Statistics Canada does not currently use digital field collection tablets to automatically route enumerators from one dwelling to 
 the next. Block sequencing is therefore used to produce routes by area which are then output as maps. Paper maps in three different 
