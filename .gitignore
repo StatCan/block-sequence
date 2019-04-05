@@ -103,4 +103,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# MacOS preview files
 .DS_Store
+
+# environment specific configuration
+.env
