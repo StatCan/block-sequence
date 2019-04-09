@@ -1,3 +1,6 @@
+# Windows users may find it more helpful to grab some packages from 
+# https://www.lfd.uci.edu/~gohlke/pythonlibs/
+
 click==6.7
 click-log==0.3.2
 click-plugins==1.0.3
