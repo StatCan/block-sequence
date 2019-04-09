@@ -11,11 +11,11 @@ from sqlalchemy import create_engine
 logger = logging.getLogger()
 
 @click.command()
-@click.option('--parent_layer', help="Parent geography layer name")
-@click.option('--parent_uid', help="Parent geography layer UID field name")
+@click.argument('parent_layer', envvar='SEQ_PARENT_LAYER')
+@click.argument('parent_uid', envvar='SEQ_PARENT_UID')
 @click.pass_context
 def sp_weights(ctx, parent_layer, parent_uid):
-  """Assess the weight of each node in an LU boundary to calculate preferred start points for 
+  """Assess the weight of each node in an parent geography boundary to calculate preferred start points for 
   distance calculations.
   """
 
@@ -23,10 +23,10 @@ def sp_weights(ctx, parent_layer, parent_uid):
 
   # for each geometry, get the boundary of objects down to coordinate values and build a 
   # dataframe that value_counts() can be run on to find the ranking
-  source_db = ctx['source_db']
-  source_user = ctx['source_user']
-  source_pass = ctx['source_pass']
-  source_host = ctx['source_host']
+  source_db = ctx.obj['source_db']
+  source_user = ctx.obj['source_user']
+  source_pass = ctx.obj['source_pass']
+  source_host = ctx.obj['source_host']
   conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
   sql = "SELECT {}, geometry FROM {}".format(parent_uid, parent_layer)
 
