@@ -37,13 +37,15 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   print(source_db)
   logger.debug("blocksequence end")
 
-main.add_command(prepare.sp_weights)
+# add subcommands
+main.add_command(utils.sp_weights)
 main.add_command(sequence.sequence)
 
 if __name__ == '__main__':
   # make sure the environment is set up
   logger.debug("Loading environment variables")
   load_dotenv()
+  print(__name__)
 
   # start the application
   main(obj={})
