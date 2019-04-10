@@ -4,11 +4,14 @@ import click
 import click_log
 from dotenv import load_dotenv
 
-from .prepare import commands as prepare
+from .utils import commands as utils
 from .sequence import commands as sequence
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
+
+# support loading of environment from .env files
+load_dotenv()
 
 @click.group()
 @click_log.simple_verbosity_option(logger)
@@ -19,7 +22,7 @@ click_log.basic_config(logger)
 @click.option('--outdb', envvar='SEQ_OUTPUT', default='sequencing.sqlite', help="Output SQLite database filename")
 @click.pass_context
 def main(ctx, source_host, source_db, source_user, source_pass, outdb):
-  """Placeholder to attach subcommands."""
+  """Sequence a road network through a geography to aid in enumeration."""
 
   logger.debug("blocksequence start")
 
@@ -41,11 +44,9 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 main.add_command(utils.sp_weights)
 main.add_command(sequence.sequence)
 
-if __name__ == '__main__':
-  # make sure the environment is set up
-  logger.debug("Loading environment variables")
-  load_dotenv()
-  print(__name__)
-
-  # start the application
+def start():
   main(obj={})
+
+if __name__ == '__main__':
+  # start the application
+  start()

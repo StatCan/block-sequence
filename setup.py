@@ -25,7 +25,7 @@ setup(name='blocksequence',
   ],
   entry_points={
     'console_scripts': [
-      'blocksequence=blocksequence.cli:main'
+      'blocksequence=blocksequence.cli:start'
     ]
   }
 )
