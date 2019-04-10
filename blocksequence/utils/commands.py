@@ -15,8 +15,11 @@ logger = logging.getLogger()
 @click.argument('parent_uid', envvar='SEQ_PARENT_UID')
 @click.pass_context
 def sp_weights(ctx, parent_layer, parent_uid):
-  """Assess the weight of each node in an parent geography boundary to calculate preferred start points for 
-  distance calculations.
+  """Assess the weight of each node in an parent geography.
+  
+  Parent geography boundaries are used to calculate potential start points for routing through
+  the road network. The more popular a given point, the less an enumerator would need to travel between 
+  geographies, making it more desirable to use.
   """
 
   logger.debug("sp_weights start")
