@@ -31,9 +31,11 @@ def sp_weights(ctx, parent_layer, parent_uid):
   source_pass = ctx.obj['source_pass']
   source_host = ctx.obj['source_host']
   conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
-  sql = "SELECT {}, geometry FROM {}".format(parent_uid, parent_layer)
 
+  # get every parent geography in the dataset
+  sql = "SELECT {}, geom FROM {}".format(parent_uid, parent_layer)
   pgeo = gpd.GeoDataFrame.from_postgis(sql, conn)
+  # pull out the nodes in the polygons
   pgeo['coords'] = pgeo.geometry.boundary.apply(lambda x: x[0].coords)
   sp = pgeo[[parent_uid, 'coords']]
   d = []
