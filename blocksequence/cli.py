@@ -3,6 +3,8 @@ import logging
 import click
 import click_log
 from dotenv import load_dotenv
+import psycopg2
+from sqlalchemy import create_engine
 
 from .utils import commands as utils
 from .sequence import commands as sequence
@@ -32,15 +34,13 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   ctx.ensure_object(dict)
 
   # TODO: initiate the source and output database connections and store those in the context
-  output_conn = create_engine('sqlite://{}'.format(outdb), echo=False)
+  src_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
+  dest_conn = create_engine('sqlite://{}'.format(outdb), echo=False)
 
   # attach DB information to the context
   ctx.obj = {
-    'source_host': source_host,
-    'source_db': source_db,
-    'source_user': source_user,
-    'source_pass': source_pass,
-    'output_db': outdb
+    'src_db': src_conn,
+    'dest_db': dest_conn
   }
   print(source_db)
   logger.debug("blocksequence end")

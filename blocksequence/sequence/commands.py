@@ -14,9 +14,10 @@ logger = logging.getLogger()
 @click.command()
 @click.argument('bf_tbl', envvar='SEQ_BF_TABLE')
 @click.argument('weight_field', envvar='SEQ_ROAD_COST')
+@click.option('--pgeo', default=None, show_default=True, help="Parent geography layer name")
 @click.option('--pid', default=None, show_default=True, help="Parent geography UID")
 @click.pass_context
-def sequence(ctx, bf_tbl, weight_field, pid):
+def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
   """Sequence one or all LUs in the source data.
 
   If no pid is specified, all geographies found in the parent geography will be sequenced.
@@ -25,15 +26,11 @@ def sequence(ctx, bf_tbl, weight_field, pid):
   logger.debug("sequence started")
 
   # build a DataFrame from the database
-  # TODO: move the connection to the context so that it doesn't have to be rebuilt
-  source_db = ctx.obj['source_db']
-  source_user = ctx.obj['source_user']
-  source_pass = ctx.obj['source_pass']
-  source_host = ctx.obj['source_host']
-  db_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
-
-  sql = "SELECT * FROM {}".format(bf_tbl)
-  lu_edges = pd.read_sql(sql, con=db_conn)
+  if pid:
+    sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, pgeo, pid)
+  else:
+    sql = "SELECT * FROM {}".format(bf_tbl)
+  lu_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
 
   # build a graph from the edge list in the DataFrame
   g = nx.convert_matrix.from_pandas_edgelist(lu_edges, 'start_node', 'end_node', True, nx.MultiGraph)
@@ -97,10 +94,8 @@ def sequence(ctx, bf_tbl, weight_field, pid):
   edge_sequence = pd.DataFrame.from_records(flatten_edgelist(cpp_edgelist))
   edge_sequence.sort_values(by='sequence', inplace=True)
   
-  # TODO: move the connection to the context so that it doesn't need to be rebuilt
-  output = ctx['output_db']
-  engine = create_engine('sqlite://{}'.format(output), echo=False)
-  edge_sequence.to_sql('edge_list', con=engine)
+  # write the edge list to the outputs db
+  edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'])
 
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):

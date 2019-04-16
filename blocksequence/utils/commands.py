@@ -24,17 +24,9 @@ def sp_weights(ctx, parent_layer, parent_uid):
 
   logger.debug("sp_weights start")
 
-  # for each geometry, get the boundary of objects down to coordinate values and build a 
-  # dataframe that value_counts() can be run on to find the ranking
-  source_db = ctx.obj['source_db']
-  source_user = ctx.obj['source_user']
-  source_pass = ctx.obj['source_pass']
-  source_host = ctx.obj['source_host']
-  conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
-
   # get every parent geography in the dataset
   sql = "SELECT {}, geom FROM {}".format(parent_uid, parent_layer)
-  pgeo = gpd.GeoDataFrame.from_postgis(sql, conn)
+  pgeo = gpd.GeoDataFrame.from_postgis(sql, ctx.obj['src_db'])
   # pull out the nodes in the polygons
   pgeo['coords'] = pgeo.geometry.boundary.apply(lambda x: x[0].coords)
   sp = pgeo[[parent_uid, 'coords']]
@@ -48,8 +40,6 @@ def sp_weights(ctx, parent_layer, parent_uid):
   coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
   
   # write it all to sqlite for reference by later steps
-  output = ctx['output_db']
-  engine = create_engine('sqlite://{}'.format(output), echo=False)
-  coord_pop.to_sql('node_weights', con=engine)
+  coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'])
 
   logger.debug("sp_weights end")
