@@ -19,7 +19,9 @@ load_dotenv()
 @click.option('--source_db', envvar='SEQ_SOURCE_DB', help="Source database name")
 @click.option('--source_user', envvar='SEQ_SOURCE_USER', help="Source DB username")
 @click.option('--source_pass', envvar='SEQ_SOURCE_PASS', help="Source DB password")
-@click.option('--outdb', envvar='SEQ_OUTPUT', default='sequencing.sqlite', help="Output SQLite database filename")
+@click.option('--outdb', envvar='SEQ_OUTPUT', default='sequencing.sqlite', 
+  type=click.Path(dir_okay=False, resolve_path=True),
+  help="Output SQLite database filename")
 @click.pass_context
 def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   """Sequence a road network through a geography to aid in enumeration."""
@@ -30,6 +32,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   ctx.ensure_object(dict)
 
   # TODO: initiate the source and output database connections and store those in the context
+  output_conn = create_engine('sqlite://{}'.format(outdb), echo=False)
 
   # attach DB information to the context
   ctx.obj = {
