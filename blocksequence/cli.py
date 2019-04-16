@@ -29,6 +29,8 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   # ensure that ctx.obj exists and is a dict
   ctx.ensure_object(dict)
 
+  # TODO: initiate the source and output database connections and store those in the context
+
   # attach DB information to the context
   ctx.obj = {
     'source_host': source_host,

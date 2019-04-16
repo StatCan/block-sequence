@@ -7,14 +7,16 @@ import click
 import networkx as nx
 import pandas as pd
 import psycopg2
+from sqlalchemy import create_engine
 
 logger = logging.getLogger()
 
 @click.command()
+@click.argument('bf_tbl', envvar='SEQ_BF_TABLE')
+@click.argument('weight_field', envvar='SEQ_ROAD_COST')
 @click.option('--pid', default=None, show_default=True, help="Parent geography UID")
-@click.option('--weight_field', default='SHAPE_Length')
 @click.pass_context
-def sequence(ctx, pid, weight_field):
+def sequence(ctx, bf_tbl, weight_field, pid):
   """Sequence one or all LUs in the source data.
 
   If no pid is specified, all geographies found in the parent geography will be sequenced.
@@ -23,7 +25,15 @@ def sequence(ctx, pid, weight_field):
   logger.debug("sequence started")
 
   # build a DataFrame from the database
-  lu_edges = None #sql results as dataframe
+  # TODO: move the connection to the context so that it doesn't have to be rebuilt
+  source_db = ctx.obj['source_db']
+  source_user = ctx.obj['source_user']
+  source_pass = ctx.obj['source_pass']
+  source_host = ctx.obj['source_host']
+  db_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
+
+  sql = "SELECT * FROM {}".format(bf_tbl)
+  lu_edges = pd.read_sql(sql, con=db_conn)
 
   # build a graph from the edge list in the DataFrame
   g = nx.convert_matrix.from_pandas_edgelist(lu_edges, 'start_node', 'end_node', True, nx.MultiGraph)
@@ -68,13 +78,29 @@ def sequence(ctx, pid, weight_field):
   # pd.value_counts([e[1] for e in g_aug.degree()])
 
   # TODO: calculate the start points
+  start_point = max(g_aug.nodes()) # naive start point just to be able to run
 
   # calculate the eulerian circuit
   # start and end point are assumed to be the same, which may not be the optimal choice
   # test the total travel distance of the circuit for multiple start points
+  logger.debug("Computing eulerian circuit")
+  euler_circuit = create_eulerian_circuit(g_aug, g, weight_field, start_point)
 
   # TODO: need algorithm to pick "best" route in start point popularity vs total length
 
+  # use the chosen circuit to generate an edge list
+  logger.debug("Get edge list for circuit")
+  cpp_edgelist = create_cpp_edgelist(euler_circuit)
+
+  # flatten an edge list into a final sequence and write to db
+  logger.debug("Flattening edge list into final sequence")
+  edge_sequence = pd.DataFrame.from_records(flatten_edgelist(cpp_edgelist))
+  edge_sequence.sort_values(by='sequence', inplace=True)
+  
+  # TODO: move the connection to the context so that it doesn't need to be rebuilt
+  output = ctx['output_db']
+  engine = create_engine('sqlite://{}'.format(output), echo=False)
+  edge_sequence.to_sql('edge_list', con=engine)
 
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):
@@ -91,6 +117,7 @@ def get_shortest_paths_distances(graph, pairs, edge_weight_name):
   logger.debug("get_shortest_paths_distances end")
   return distances
 
+
 def create_complete_graph(pair_weights, flip_weights=True):
   """Create a complete graph from a set of weighted pairs."""
 
@@ -102,6 +129,7 @@ def create_complete_graph(pair_weights, flip_weights=True):
   
   logger.debug("create_complete_graph end")
   return g
+
 
 def add_augmented_path_to_graph(graph, min_weight_pairs):
   """Add the min weight matching edges to the original graph.
@@ -124,3 +152,89 @@ def add_augmented_path_to_graph(graph, min_weight_pairs):
   
   logger.debug("add_augmented_path_to_graph end")
   return graph_aug
+
+
+def create_cpp_edgelist(euler_circuit):
+  """
+  Create the edgelist without parallel edge for the visualization
+  Combine duplicate edges and keep track of their sequence and # of walks
+  Parameters:
+      euler_circuit: list[tuple] from create_eulerian_circuit
+  """
+
+  logging.debug("create_cpp_edgelist start")
+  cpp_edgelist = {}
+
+  for i, e in enumerate(euler_circuit):
+    edge   = frozenset([e[0], e[1]])
+    
+    # each edge can have multiple paths (L/R), so number accordingly
+    if edge not in cpp_edgelist:
+      cpp_edgelist[edge] = e
+      # label the right edge with the sequence number
+      # this implements the 'right hand rule'
+      for j, bf in enumerate(cpp_edgelist[edge][2]):
+        if cpp_edgelist[edge][2][j]['ARC_SIDE'] == 'R':
+          cpp_edgelist[edge][2][j]['sequence'] = i
+          cpp_edgelist[edge][2][j]['visits'] = 1
+    else:
+      # label the other edge with a sequence number
+      for j, bf in enumerate(cpp_edgelist[edge][2]):
+        if not cpp_edgelist[edge][2][j].get('sequence'):
+          cpp_edgelist[edge][2][j]['sequence'] = i
+          cpp_edgelist[edge][2][j]['visits'] = 1
+          continue
+
+  logging.debug("create_cpp_edgelist end")
+  return list(cpp_edgelist.values())
+
+
+def flatten_edgelist(edgelist):
+  """Turn a MultiGraph edge list into a flattened list."""
+
+  logging.debug("flatten_edgelist start")
+  for multiedge in edgelist:
+    source = multiedge[0]
+    target = multiedge[1]
+    for edge in multiedge[2]:
+      edge_attribs = multiedge[2][edge]
+      edge_attribs['source_x'] = source[0]
+      edge_attribs['source_y'] = source[1]
+      edge_attribs['target_x'] = target[0]
+      edge_attribs['target_y'] = target[1]
+      yield edge_attribs
+  
+  logging.debug("flatten_edgelist end")
+
+
+def create_eulerian_circuit(graph_augmented, graph_original, weight_field_name, start_node=None):
+  """Create the eulerian path using only edges from the original graph."""
+
+  logging.debug("create_eulerian_circuit start")
+  euler_circuit = []
+  naive_circuit = list(nx.eulerian_circuit(graph_augmented, source=start_node))
+  
+  for edge in naive_circuit:
+    # get the original edge data
+    edge_data = graph_augmented.get_edge_data(edge[0], edge[1])
+    
+    # this is not an augmented path, just append it to the circuit
+    if edge_data[0].get('trail') != 'augmented':
+      edge_att = graph_original[edge[0]][edge[1]]
+      # appends a tuple to the final circuit
+      euler_circuit.append((edge[0], edge[1], edge_att))
+      continue
+  
+    # edge is augmented, find the shortest 'real' route
+    aug_path = nx.shortest_path(graph_original, edge[0], edge[1], weight=weight_field_name)
+    aug_path_pairs = list(zip(aug_path[:-1], aug_path[1:]))
+
+    logging.debug('Filling in edges for augmented edge: %s', edge)
+
+    # add the edges from the shortest path
+    for edge_aug in aug_path_pairs:
+        edge_aug_att = graph_original[edge_aug[0]][edge_aug[1]]
+        euler_circuit.append((edge_aug[0], edge_aug[1], edge_aug_att))
+  
+  logging.debug("create_eulerian_circuit end")
+  return euler_circuit

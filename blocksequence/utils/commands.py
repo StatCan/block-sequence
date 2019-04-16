@@ -48,7 +48,7 @@ def sp_weights(ctx, parent_layer, parent_uid):
   coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
   
   # write it all to sqlite for reference by later steps
-  output = ctx['output']
+  output = ctx['output_db']
   engine = create_engine('sqlite://{}'.format(output), echo=False)
   coord_pop.to_sql('node_weights', con=engine)
 
