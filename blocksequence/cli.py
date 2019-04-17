@@ -48,6 +48,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 # add subcommands
 main.add_command(utils.sp_weights)
 main.add_command(sequence.sequence)
+main.add_command(utils.order_blocks)
 
 def start():
   main(obj={})

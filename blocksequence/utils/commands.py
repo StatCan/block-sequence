@@ -43,3 +43,43 @@ def sp_weights(ctx, parent_layer, parent_uid):
   coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'])
 
   logger.debug("sp_weights end")
+
+def get_circuit_distance(circuit, length_field):
+  """Compute the total distance for a complete eulerian circuit."""
+  
+  return sum([edge[2][0][length_field] for edge in circuit])
+
+def get_graph_distance(g, length_field):
+  """Compute the total distance for a given graph."""
+
+  return sum(nx.get_edge_attributes(g, weight_field_name).values())
+
+def get_edge_count(g):
+  """Calculate the total number of edges in a graph."""
+  return len(g.edges())
+
+def get_node_count(g):
+  """Calculate the total number of nodes in a graph."""
+  return len(g.nodes())
+
+@click.command()
+@click.argument('cid', envvar='SEQ_CHILD_UID', help='Field name of the child geography unique identifer')
+@click.pass_context
+def order_blocks(ctx, cid):
+  """Calculate the block ordering based on the edge sequence."""
+
+  # pull the edge sequence out of the database
+  edge_sequence = pd.read_sql("SELECT * FROM edge_sequence", con=ctx.obj['src_db'])
+
+  # group the blocks by the child geo ID
+  grouped = edge_sequence.groupby(cid, sort=False)
+  block_order = 1
+  for name, group in grouped:
+    edge_sequence.loc[edge_sequence[cid] == name, 'block_order'] = block_order
+    edge_sequence.loc[edge_sequence[cid] == name, 'edge_order'] = range(1, len(group)+1)
+    block_order += 1
+  
+  # calculate the chain ID
+  edge_sequence['chain_id'] = np.where(edge_sequence['edge_order'] == 1, 1, 0)
+
+  edge_sequence.to_sql('ordered_sequence', con=ctx.obj['dest_db'])
