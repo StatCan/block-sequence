@@ -48,19 +48,25 @@ def sp_weights(ctx, parent_layer, parent_uid):
 def get_circuit_distance(circuit, length_field):
   """Compute the total distance for a complete eulerian circuit."""
   
+  logger.debug('calculating circuit distance')
   return sum([edge[2][0][length_field] for edge in circuit])
 
 def get_graph_distance(g, length_field):
   """Compute the total distance for a given graph."""
 
+  logger.debug('calculating graph distance')
   return sum(nx.get_edge_attributes(g, weight_field_name).values())
 
 def get_edge_count(g):
   """Calculate the total number of edges in a graph."""
+
+  logger.debug('getting edge count for graph')
   return len(g.edges())
 
 def get_node_count(g):
   """Calculate the total number of nodes in a graph."""
+
+  logger.debug('getting node count for graph')
   return len(g.nodes())
 
 @click.command()
@@ -68,6 +74,8 @@ def get_node_count(g):
 @click.pass_context
 def order_blocks(ctx, cid):
   """Calculate the block ordering based on the edge sequence."""
+
+  logger.debug('order_blocks started')
 
   # pull the edge sequence out of the database
   edge_sequence = pd.read_sql("SELECT * FROM edge_sequence", con=ctx.obj['src_db'])
@@ -84,6 +92,8 @@ def order_blocks(ctx, cid):
   edge_sequence['chain_id'] = np.where(edge_sequence['edge_order'] == 1, 1, 0)
 
   edge_sequence.to_sql('ordered_sequence', con=ctx.obj['dest_db'])
+
+  logger.debug('order_blocks ended')
 
 
 @click.command()

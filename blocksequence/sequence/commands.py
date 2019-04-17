@@ -23,7 +23,7 @@ def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
   If no pid is specified, all geographies found in the parent geography will be sequenced.
   """
 
-  logger.debug("sequence started")
+  logger.debug("sequence start")
 
   # build a DataFrame from the database
   if pid:
@@ -96,6 +96,8 @@ def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
   
   # write the edge list to the outputs db
   edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'])
+
+  logger.debug('sequence end')
 
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):
@@ -171,13 +173,13 @@ def create_cpp_edgelist(euler_circuit):
       for j, bf in enumerate(cpp_edgelist[edge][2]):
         if cpp_edgelist[edge][2][j]['ARC_SIDE'] == 'R':
           cpp_edgelist[edge][2][j]['sequence'] = i
-          cpp_edgelist[edge][2][j]['visits'] = 1
+          cpp_edgelist[edge][2][j]['visits'] = 1 # shouldn't be hardcoded
     else:
       # label the other edge with a sequence number
       for j, bf in enumerate(cpp_edgelist[edge][2]):
         if not cpp_edgelist[edge][2][j].get('sequence'):
           cpp_edgelist[edge][2][j]['sequence'] = i
-          cpp_edgelist[edge][2][j]['visits'] = 1
+          cpp_edgelist[edge][2][j]['visits'] = 1 # shouldn't be hardcoded
           continue
 
   logging.debug("create_cpp_edgelist end")
