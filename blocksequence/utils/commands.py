@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine
@@ -83,3 +84,13 @@ def order_blocks(ctx, cid):
   edge_sequence['chain_id'] = np.where(edge_sequence['edge_order'] == 1, 1, 0)
 
   edge_sequence.to_sql('ordered_sequence', con=ctx.obj['dest_db'])
+
+
+@click.command()
+@click.pass_context
+def start_points(ctx):
+  """Generate a table of all the start points in the sequence."""
+  
+  logger.debug('start_points begin')
+
+  logger.debug('start_points end')
