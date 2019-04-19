@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 import geopandas as gpd
+import networkx as nx
 import numpy as np
 import pandas as pd
 import psycopg2
@@ -55,7 +56,7 @@ def get_graph_distance(g, length_field):
   """Compute the total distance for a given graph."""
 
   logger.debug('calculating graph distance')
-  return sum(nx.get_edge_attributes(g, weight_field_name).values())
+  return sum(nx.get_edge_attributes(g, length_field).values())
 
 def get_edge_count(g):
   """Calculate the total number of edges in a graph."""
@@ -97,10 +98,59 @@ def order_blocks(ctx, cid):
 
 
 @click.command()
+@click.argument('pgeo', envvar='SEQ_PARENT_LAYER', help='Name of the parent geography layer')
 @click.pass_context
-def start_points(ctx):
+def start_points(ctx, pgeo):
   """Generate a table of all the start points in the sequence."""
   
   logger.debug('start_points begin')
 
+  sp = pd.read_sql("SELECT block_order, bf_uid, edge_order, lb_uid, source_x, source_y, arc_side, startnodenumber, ngd_uid, lu_uid FROM ordered_sequence WHERE edge_order = 1", ctx.obj['dest_db'])
+  # seems like a waste of time - maybe rename the columns?
+  sp['x'] = sp['source_x']
+  sp['y'] = sp['source_y']
+
+  # add a t_flag field
+  sp['t_flag'] = None
+
+  # add the ngd_uid - just pulled it from the sql query, since it's on the edge sequence table already
+
+  # set the LUID (LU_UID was brought in from SQL)
+  lu_info = pd.read_sql("SELECT luid, lu_uid FROM {}".format(pgeo), con=ctx.obj['src_db'])
+  sp['luid'] = lu_info.loc[lu_info['lu_uid'] == sp['lu_uid']]
+
+  sp.to_sql('start_points', con=ctx.obj['dest_db'])
+
   logger.debug('start_points end')
+
+@click.command()
+@click.argument('pgeo', envvar='SEQ_PARENT_LAYER', help='Parent geography layer name')
+@click.argument('roads', envvar='SEQ_ROAD_LAYER', help='Road geometry layer name')
+@click.pass_context
+def t_intersections(ctx, pgeo, roads):
+  """Find places where the road network forms a T intersection with the parent geography boundary."""
+
+  logger.debug("t_intersections start")
+
+  poly = gpd.GeoDataFrame.from_postgis("SELECT geom, ngd_uid FROM {}".format(pgeo), con=ctx.obj['src_db'])
+  roads = gpd.GeoDataFrame.from_postgis("SELECT geom, ngd_uid FROM {}".format(roads), con=ctx.obj['src_db'])
+
+  # needs to test the boundary of the polygon, not the polygon itself
+  poly_edges = list(poly.geometry.boundary)
+  roads['is_t'] = roads[roads['SGMNT_TYP_CDE'] == 2].geometry.apply(lambda r: forms_t(r, poly_edges))
+
+  roads[roads['is_t'] == True].to_sql('t_intersection', con=ctx.obj['dest_db'])
+
+  logger.debug('t_intersections end')
+
+def forms_t(arc, edges):
+  """Check if arc forms a T intersection with the provided edge list."""
+
+  is_t = False
+  for edge in edges:
+    if arc.touches(edge):
+      is_t = True
+      # bail on match, no point in finding more
+      break
+  
+  return is_t
