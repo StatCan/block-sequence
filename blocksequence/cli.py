@@ -33,8 +33,10 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   # ensure that ctx.obj exists and is a dict
   ctx.ensure_object(dict)
 
-  # TODO: initiate the source and output database connections and store those in the context
+  # initiate the source and output database connections and store those in the context
+  logger.debug("Source DB: {} as {} on {}".format(source_db, source_user, source_host))
   src_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
+  logger.debug("Output DB: {}".format(outdb))
   dest_conn = create_engine('sqlite://{}'.format(outdb), echo=False)
 
   # attach DB information to the context
@@ -42,7 +44,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
     'src_db': src_conn,
     'dest_db': dest_conn
   }
-  
+
   logger.debug("blocksequence end")
 
 # add subcommands
