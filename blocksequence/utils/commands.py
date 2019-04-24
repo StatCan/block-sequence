@@ -71,7 +71,7 @@ def get_node_count(g):
   return len(g.nodes())
 
 @click.command()
-@click.argument('cid', envvar='SEQ_CHILD_UID', help='Field name of the child geography unique identifer')
+@click.argument('cid', envvar='SEQ_CHILD_UID')
 @click.pass_context
 def order_blocks(ctx, cid):
   """Calculate the block ordering based on the edge sequence."""
@@ -98,7 +98,7 @@ def order_blocks(ctx, cid):
 
 
 @click.command()
-@click.argument('pgeo', envvar='SEQ_PARENT_LAYER', help='Name of the parent geography layer')
+@click.argument('pgeo', envvar='SEQ_PARENT_LAYER')
 @click.pass_context
 def start_points(ctx, pgeo):
   """Generate a table of all the start points in the sequence."""
@@ -124,8 +124,8 @@ def start_points(ctx, pgeo):
   logger.debug('start_points end')
 
 @click.command()
-@click.argument('pgeo', envvar='SEQ_PARENT_LAYER', help='Parent geography layer name')
-@click.argument('roads', envvar='SEQ_ROAD_LAYER', help='Road geometry layer name')
+@click.argument('pgeo', envvar='SEQ_PARENT_LAYER')
+@click.argument('roads', envvar='SEQ_ROAD_LAYER')
 @click.pass_context
 def t_intersections(ctx, pgeo, roads):
   """Find places where the road network forms a T intersection with the parent geography boundary."""
