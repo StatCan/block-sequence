@@ -37,7 +37,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   logger.debug("Source DB: {} as {} on {}".format(source_db, source_user, source_host))
   src_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
   logger.debug("Output DB: {}".format(outdb))
-  dest_conn = create_engine('sqlite://{}'.format(outdb), echo=False)
+  dest_conn = create_engine('sqlite:///{}'.format(outdb), echo=False)
 
   # attach DB information to the context
   ctx.obj = {
