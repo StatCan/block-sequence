@@ -27,9 +27,12 @@ def sp_weights(ctx, parent_layer, parent_uid):
   logger.debug("sp_weights start")
 
   # get every parent geography in the dataset
+  logger.debug("Getting %s layer data", parent_layer)
   sql = "SELECT {}, geom FROM {}".format(parent_uid, parent_layer)
   pgeo = gpd.GeoDataFrame.from_postgis(sql, ctx.obj['src_db'])
+
   # pull out the nodes in the polygons
+  logger.degug("Calculating node coordinates for every polygon")
   pgeo['coords'] = pgeo.geometry.boundary.apply(lambda x: x[0].coords)
   sp = pgeo[[parent_uid, 'coords']]
   d = []
@@ -39,9 +42,11 @@ def sp_weights(ctx, parent_layer, parent_uid):
     for i in v:
       d.append((k,i))
   coord_pop = pd.DataFrame(d, columns=[parent_uid, 'node'])
+  logger.debug("Grouping nodes to determine popularity")
   coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
   
   # write it all to sqlite for reference by later steps
+  logger.debug("Saving to node_weights table")
   coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'])
 
   logger.debug("sp_weights end")
