@@ -42,7 +42,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
     'src_db': src_conn,
     'dest_db': dest_conn
   }
-  print(source_db)
+  
   logger.debug("blocksequence end")
 
 # add subcommands
