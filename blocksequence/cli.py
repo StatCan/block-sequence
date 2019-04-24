@@ -49,6 +49,8 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 main.add_command(utils.sp_weights)
 main.add_command(sequence.sequence)
 main.add_command(utils.order_blocks)
+main.add_command(utils.t_intersections)
+main.add_command(utils.start_points)
 
 def start():
   main(obj={})
