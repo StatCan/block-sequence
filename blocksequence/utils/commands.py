@@ -44,6 +44,8 @@ def sp_weights(ctx, parent_layer, parent_uid):
   coord_pop = pd.DataFrame(d, columns=[parent_uid, 'node'])
   logger.debug("Grouping nodes to determine popularity")
   coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
+  # cast the node to str for writing to the db
+  coord_pop['node'] = coord_pop['node'].astype(str)
   
   # write it all to sqlite for reference by later steps
   logger.debug("Saving to node_weights table")
