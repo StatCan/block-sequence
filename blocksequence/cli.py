@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from .utils import commands as utils
 from .sequence import commands as sequence
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 click_log.basic_config(logger)
 
 # support loading of environment from .env files

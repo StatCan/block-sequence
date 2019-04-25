@@ -10,7 +10,7 @@ import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 @click.command()
 @click.argument('parent_layer', envvar='SEQ_PARENT_LAYER')

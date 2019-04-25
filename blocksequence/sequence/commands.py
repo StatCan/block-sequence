@@ -9,7 +9,7 @@ import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 @click.command()
 @click.argument('bf_tbl', envvar='SEQ_BF_TABLE')
