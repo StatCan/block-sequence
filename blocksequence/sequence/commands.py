@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('bf_tbl', envvar='SEQ_BF_TABLE')
 @click.argument('weight_field', envvar='SEQ_ROAD_COST')
-@click.option('--pgeo', default=None, show_default=True, help="Parent geography layer name")
+@click.argument('parent_geo', envvar='SEQ_PARENT_LAYER')
 @click.option('--pid', default=None, show_default=True, help="Parent geography UID")
 @click.pass_context
 def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
@@ -30,74 +30,79 @@ def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
     sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, pgeo, pid)
   else:
     sql = "SELECT * FROM {}".format(bf_tbl)
-  lu_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
+  all_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
 
-  # build a graph from the edge list in the DataFrame
-  g = nx.convert_matrix.from_pandas_edgelist(lu_edges, 'start_node', 'end_node', True, nx.MultiGraph)
-  logger.debug("Multigraph with %s nodes and %s edges build", len(g.nodes()), len(g.edges()))
+  # group the edges by parent geo UID
+  pg_grouped = all_edges.groupby(pgeo)
+  for pg_uid, pg_group in pg_grouped:
+    logger.debug("Working on parent geography: %s", pg_uid)
 
-  # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
-  is_connected = nx.is_connected(g)
-  logger.debug("Graph is fully connected: %s", is_connected)
+    # build a graph from the edge list in the DataFrame
+    g = nx.convert_matrix.from_pandas_edgelist(pg_group, 'start_node', 'end_node', True, nx.MultiGraph)
+    logger.debug("Multigraph with %s nodes and %s edges build", len(g.nodes()), len(g.edges()))
 
-  # find nodes of odd degree (dead ends)
-  logger.info("Finding nodes of odd degree in graph")
-  nodes_odd_degree = [v for v,d in g.degree() if d % 2 == 1]
-  logger.debug("Found %s nodes of odd degree", len(nodes_odd_degree))
+    # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
+    is_connected = nx.is_connected(g)
+    logger.debug("Graph is fully connected: %s", is_connected)
 
-  # compute pairs for odd degree nodes to get out of dead ends
-  logger.info("Calculating node pairs for odd degree nodes")
-  odd_node_pairs = list(itertools.combinations(nodes_odd_degree, 2))
-  logger.debug("Calculated %s node pairs", len(odd_node_pairs))
-  if len(odd_node_pairs) > 150:
-    logger.warning("%s node pairs is high, and will be slower to process", len(odd_node_pairs))
-  
-  # compute shortest paths
-  logger.info("Calculating shortest paths for odd node pairs")
-  odd_node_shortest_paths = get_shortest_paths_distances(g, odd_node_pairs, weight_field)
+    # find nodes of odd degree (dead ends)
+    logger.info("Finding nodes of odd degree in graph")
+    nodes_odd_degree = [v for v,d in g.degree() if d % 2 == 1]
+    logger.debug("Found %s nodes of odd degree", len(nodes_odd_degree))
 
-  # create a complete graph
-  logger.info("Making graph with shortest paths for odd nodes")
-  g_odd_complete = create_complete_graph(odd_node_shortest_paths)
+    # compute pairs for odd degree nodes to get out of dead ends
+    logger.info("Calculating node pairs for odd degree nodes")
+    odd_node_pairs = list(itertools.combinations(nodes_odd_degree, 2))
+    logger.debug("Calculated %s node pairs", len(odd_node_pairs))
+    if len(odd_node_pairs) > 150:
+      logger.warning("%s node pairs is high, and will be slower to process", len(odd_node_pairs))
+    
+    # compute shortest paths
+    logger.info("Calculating shortest paths for odd node pairs")
+    odd_node_shortest_paths = get_shortest_paths_distances(g, odd_node_pairs, weight_field)
 
-  # compute minimum weight matches
-  logger.info("Calculating minimum weight matches for odd node pairs")
-  odd_matching_dupes = nx.algorithms.max_weight_matching(g_odd_complete, True)
-  odd_matching = list(pd.unique([tuple(sorted([k,v])) for k, v in odd_matching_dupes]))
-  logger.debug("Number of edges to augment original graph with: %s", len(odd_matching))
+    # create a complete graph
+    logger.info("Making graph with shortest paths for odd nodes")
+    g_odd_complete = create_complete_graph(odd_node_shortest_paths)
 
-  # augment the original graph with the new values
-  logger.info("Augmenting original graph with deduplicated odd node pairs")
-  g_aug = add_augmented_path_to_graph(g, odd_matching)
-  logger.debug("Edge count in augmented graph: %s", len(g_aug.edges()))
+    # compute minimum weight matches
+    logger.info("Calculating minimum weight matches for odd node pairs")
+    odd_matching_dupes = nx.algorithms.max_weight_matching(g_odd_complete, True)
+    odd_matching = list(pd.unique([tuple(sorted([k,v])) for k, v in odd_matching_dupes]))
+    logger.debug("Number of edges to augment original graph with: %s", len(odd_matching))
 
-  # TODO: validate that all nodes are now of even degree
-  # pd.value_counts([e[1] for e in g_aug.degree()])
+    # augment the original graph with the new values
+    logger.info("Augmenting original graph with deduplicated odd node pairs")
+    g_aug = add_augmented_path_to_graph(g, odd_matching)
+    logger.debug("Edge count in augmented graph: %s", len(g_aug.edges()))
 
-  # TODO: calculate the start points
-  start_point = max(g_aug.nodes()) # naive start point just to be able to run
+    # TODO: validate that all nodes are now of even degree
+    # pd.value_counts([e[1] for e in g_aug.degree()])
 
-  # calculate the eulerian circuit
-  # start and end point are assumed to be the same, which may not be the optimal choice
-  # test the total travel distance of the circuit for multiple start points
-  logger.debug("Computing eulerian circuit")
-  euler_circuit = create_eulerian_circuit(g_aug, g, weight_field, start_point)
+    # TODO: calculate the start points
+    start_point = max(g_aug.nodes()) # naive start point just to be able to run
 
-  # TODO: need algorithm to pick "best" route in start point popularity vs total length
+    # calculate the eulerian circuit
+    # start and end point are assumed to be the same, which may not be the optimal choice
+    # test the total travel distance of the circuit for multiple start points
+    logger.debug("Computing eulerian circuit")
+    euler_circuit = create_eulerian_circuit(g_aug, g, weight_field, start_point)
 
-  # use the chosen circuit to generate an edge list
-  logger.debug("Get edge list for circuit")
-  cpp_edgelist = create_cpp_edgelist(euler_circuit)
+    # TODO: need algorithm to pick "best" route in start point popularity vs total length
 
-  # flatten an edge list into a final sequence and write to db
-  logger.debug("Flattening edge list into final sequence")
-  edge_sequence = pd.DataFrame.from_records(flatten_edgelist(cpp_edgelist))
-  edge_sequence.sort_values(by='sequence', inplace=True)
-  
-  # write the edge list to the outputs db
-  edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'])
+    # use the chosen circuit to generate an edge list
+    logger.debug("Get edge list for circuit")
+    cpp_edgelist = create_cpp_edgelist(euler_circuit)
 
-  logger.debug('sequence end')
+    # flatten an edge list into a final sequence and write to db
+    logger.debug("Flattening edge list into final sequence")
+    edge_sequence = pd.DataFrame.from_records(flatten_edgelist(cpp_edgelist))
+    edge_sequence.sort_values(by='sequence', inplace=True)
+    
+    # write the edge list to the outputs db
+    edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'])
+
+    logger.debug('sequence end')
 
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):
