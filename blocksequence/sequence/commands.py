@@ -7,7 +7,9 @@ import click
 import networkx as nx
 import pandas as pd
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy.sql import select
+from ast import literal_eval
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +17,10 @@ logger = logging.getLogger(__name__)
 @click.argument('bf_tbl', envvar='SEQ_BF_TABLE')
 @click.argument('weight_field', envvar='SEQ_ROAD_COST')
 @click.argument('parent_geo', envvar='SEQ_PARENT_LAYER')
+@click.argument('parent_geo_uid', envvar='SEQ_PARENT_UID')
 @click.option('--pid', default=None, show_default=True, help="Parent geography UID")
 @click.pass_context
-def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
+def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
   """Sequence one or all LUs in the source data.
 
   If no pid is specified, all geographies found in the parent geography will be sequenced.
@@ -25,15 +28,18 @@ def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
 
   logger.debug("sequence start")
 
+  # hold onto sqlalchemy metadata
+  meta = MetaData()
+
   # build a DataFrame from the database
   if pid:
-    sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, pgeo, pid)
+    sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, parent_geo, pid)
   else:
     sql = "SELECT * FROM {}".format(bf_tbl)
   all_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
 
   # group the edges by parent geo UID
-  pg_grouped = all_edges.groupby(pgeo)
+  pg_grouped = all_edges.groupby(parent_geo)
   for pg_uid, pg_group in pg_grouped:
     logger.debug("Working on parent geography: %s", pg_uid)
 
@@ -79,20 +85,39 @@ def sequence(ctx, bf_tbl, weight_field, pgeo, pid):
     # TODO: validate that all nodes are now of even degree
     # pd.value_counts([e[1] for e in g_aug.degree()])
 
-    # TODO: calculate the start points
-    start_point = max(g_aug.nodes()) # naive start point just to be able to run
+    # pull popular nodes from the 'node_weights' table
+    node_weights = Table('node_weights', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
+    pg_nodes = select([node_weights]).where(node_weights.c.lu_uid == pg_uid).order_by(node_weights.c.weight.desc()).limit(5)
 
-    # calculate the eulerian circuit
-    # start and end point are assumed to be the same, which may not be the optimal choice
-    # test the total travel distance of the circuit for multiple start points
-    logger.debug("Computing eulerian circuit")
-    euler_circuit = create_eulerian_circuit(g_aug, g, weight_field, start_point)
+    # iterate the start points, calculating the circuit
+    shortest_distance = -1
+    chosen_circuit = None
+    for point in pg_nodes:
+      start_point = literal_eval(point[1])
 
-    # TODO: need algorithm to pick "best" route in start point popularity vs total length
+      # calculate the eulerian circuit
+      # start and end point are assumed to be the same, which may not be the optimal choice
+      # test the total travel distance of the circuit for multiple start points
+      logger.debug("Computing eulerian circuit")
+      euler_circuit = create_eulerian_circuit(g_aug, g, weight_field, start_point)
+
+      # total distance
+      circuit_dist = sum([edge[2][0][weight_field] for edge in euler_circuit])
+      logger.info("Circuit distance from %s: %s", start_point, circuit_dist)
+      if circuit_dist < shortest_distance or shortest_distance == -1:
+        shortest_distance = circuit_dist
+        chosen_circuit = euler_circuit
+        logger.debug("%s has shortest distance", start_point)
+      
+    # find the circuit with the shortest distance
+    graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
+    logger.info("Circuit distance: {0:.2f}".format(shortest_distance))
+    logger.info("Graph distance: {0:.2f}".format(graph_distance))
+    logger.info("Solution is {0:.2f}% efficient".format(graph_distance / chosen_circuit))
 
     # use the chosen circuit to generate an edge list
-    logger.debug("Get edge list for circuit")
-    cpp_edgelist = create_cpp_edgelist(euler_circuit)
+    logger.debug("Getting edge list for circuit")
+    cpp_edgelist = create_cpp_edgelist(chosen_circuit)
 
     # flatten an edge list into a final sequence and write to db
     logger.debug("Flattening edge list into final sequence")
