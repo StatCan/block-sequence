@@ -2,6 +2,7 @@ import itertools
 import logging
 import os
 from pathlib import Path
+import sys
 
 import click
 import networkx as nx
@@ -41,17 +42,20 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
 
   # group the edges by parent geo UID
   logger.debug("Grouping edges by parent geography")
-  pg_grouped = all_edges.groupby(parent_geo)
+  pg_grouped = all_edges.groupby(parent_geo_uid)
   for pg_uid, pg_group in pg_grouped:
     logger.debug("Working on parent geography: %s", pg_uid)
 
     # build a graph from the edge list in the DataFrame
     g = nx.convert_matrix.from_pandas_edgelist(pg_group, 'start_node', 'end_node', True, nx.MultiGraph)
-    logger.debug("Multigraph with %s nodes and %s edges build", len(g.nodes()), len(g.edges()))
+    logger.debug("Multigraph with %s nodes and %s edges built", len(g.nodes()), len(g.edges()))
 
     # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
     is_connected = nx.is_connected(g)
     logger.debug("Graph is fully connected: %s", is_connected)
+    if not is_connected:
+      logger.error("Disconnected graph found. Unable to route.")
+      sys.exit(1)
 
     # find nodes of odd degree (dead ends)
     logger.info("Finding nodes of odd degree in graph")
