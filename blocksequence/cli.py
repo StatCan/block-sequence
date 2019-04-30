@@ -35,9 +35,16 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 
   # initiate the source and output database connections and store those in the context
   logger.debug("Source DB: {} as {} on {}".format(source_db, source_user, source_host))
-  src_conn = psycopg2.connect(database=source_db, user=source_user, password=source_pass, host=source_host)
+  src_conn = create_engine('postgresql://{user}:{password}@{host}/{db}'.format(db=source_db, user=source_user, password=source_pass, host=source_host))
   logger.debug("Output DB: {}".format(outdb))
   dest_conn = create_engine('sqlite:///{}'.format(outdb), echo=False)
+
+  # configure logging on the database engine to match our logger
+  # sqlalchemy returns full results with debug, so avoid going to that level
+  log_level = logger.getEffectiveLevel()
+  if log_level == logging.DEBUG:
+    log_level +=  10
+  logging.getLogger('sqlalchemy.engine').setLevel(log_level)
 
   # attach DB information to the context
   ctx.obj = {
