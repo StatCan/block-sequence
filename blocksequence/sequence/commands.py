@@ -32,6 +32,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
   meta = MetaData()
 
   # build a DataFrame from the database
+  logger.debug("Building dataframe from BF list")
   if pid:
     sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, parent_geo, pid)
   else:
@@ -39,6 +40,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
   all_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
 
   # group the edges by parent geo UID
+  logger.debug("Grouping edges by parent geography")
   pg_grouped = all_edges.groupby(parent_geo)
   for pg_uid, pg_group in pg_grouped:
     logger.debug("Working on parent geography: %s", pg_uid)
