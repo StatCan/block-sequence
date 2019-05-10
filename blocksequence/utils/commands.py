@@ -8,7 +8,9 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy.sql import select
+from geoalchemy2 import Geometry
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +28,14 @@ def node_weights(ctx, parent_layer, parent_uid):
 
   logger.debug("node_weights start")
 
+  # sqlalchemy setup
+  meta = MetaData()
+
   # get every parent geography in the dataset
   logger.debug("Getting %s layer data", parent_layer)
-  sql = "SELECT {}, geom FROM {}".format(parent_uid, parent_layer)
-  pgeo = gpd.GeoDataFrame.from_postgis(sql, ctx.obj['src_db'])
+  pgeo_table = Table(parent_layer, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  pgeo_select = select([pgeo_table.c[parent_uid], pgeo_table.c.geom])
+  pgeo = gpd.GeoDataFrame.from_postgis(pgeo_select, ctx.obj['src_db'])
 
   # pull out the nodes in the polygons
   logger.debug("Calculating node coordinates for every polygon")
@@ -39,8 +45,12 @@ def node_weights(ctx, parent_layer, parent_uid):
   for r in sp.iterrows():
     k = r[1][0]
     v = r[1][1]
+    # logger.debug("%s has %s", k, v)
     for i in v:
-      d.append((k,i))
+      x, y = i
+      c = (round(x, 4), round(y, 4))
+      # logger.debug("Adding node %s to %s", c, k)
+      d.append((k,c))
   coord_pop = pd.DataFrame(d, columns=[parent_uid, 'node'])
   logger.debug("Grouping nodes to determine popularity")
   coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
@@ -85,8 +95,14 @@ def order_blocks(ctx, cid):
 
   logger.debug('order_blocks started')
 
+  # sqlalchemy setup
+  meta = MetaData()
+
   # pull the edge sequence out of the database
-  edge_sequence = pd.read_sql("SELECT * FROM edge_sequence", con=ctx.obj['src_db'])
+  logger.debug("Reading from edge_sequence table")
+  edge_table = Table('edge_sequence', meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  edge_select = select([edge_table])
+  edge_sequence = pd.read_sql(edge_select, con=ctx.obj['src_db'])
 
   # group the blocks by the child geo ID
   grouped = edge_sequence.groupby(cid, sort=False)
