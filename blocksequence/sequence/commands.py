@@ -282,7 +282,7 @@ def flatten_edgelist(edgelist):
       edge_attribs['source_y'] = source[1]
       edge_attribs['target_x'] = target[0]
       edge_attribs['target_y'] = target[1]
-      logger.debug("New edge: %s", edge_attribs)
+      # logger.debug("New edge: %s", edge_attribs)
       yield edge_attribs
   
   logging.debug("flatten_edgelist end")
