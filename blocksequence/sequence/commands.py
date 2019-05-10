@@ -1,3 +1,4 @@
+from ast import literal_eval
 import itertools
 import logging
 import os
@@ -8,9 +9,10 @@ import click
 import networkx as nx
 import pandas as pd
 import psycopg2
+from sqlalchemy.ext.automap import automap_base
 from sqlalchemy import create_engine, MetaData, Table
 from sqlalchemy.sql import select
-from ast import literal_eval
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +22,9 @@ logger = logging.getLogger(__name__)
 @click.argument('parent_geo', envvar='SEQ_PARENT_LAYER')
 @click.argument('parent_geo_uid', envvar='SEQ_PARENT_UID')
 @click.option('--pid', default=None, show_default=True, help="Parent geography UID")
+@click.option('--node_limit', type=int, default=5, show_default=True, help="How many potential nodes to try as start points")
 @click.pass_context
-def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
+def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_limit):
   """Sequence one or all LUs in the source data.
 
   If no pid is specified, all geographies found in the parent geography will be sequenced.
@@ -29,7 +32,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
 
   logger.debug("sequence start")
 
-  # hold onto sqlalchemy metadata
+  # sqlalchemy setup
   meta = MetaData()
 
   # build a DataFrame from the database
@@ -40,7 +43,8 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
   edge_table_query = select([edge_table])
   # the user only wants to focus on a given parent geography
   if pid:
-    edge_table_query.where(edge_table.columns[parent_geo_uid] == pid)
+    logger.info("Limiting analysis to %s %s", parent_geo_uid, pid)
+    edge_table_query = select([edge_table], edge_table.c[parent_geo_uid] == pid)
 
   all_edges = pd.read_sql(edge_table_query, con=ctx.obj['src_db'], coerce_float=False)
   # prevent pandas from storing numeric IDs as floats
@@ -54,7 +58,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
 
     # build a graph from the edge list in the DataFrame
     g = nx.convert_matrix.from_pandas_edgelist(pg_group, 'start_node', 'end_node', True, nx.MultiGraph)
-    logger.debug("Multigraph with %s nodes and %s edges built", len(g.nodes()), len(g.edges()))
+    logger.debug("MultiGraph with %s nodes and %s edges built", len(g.nodes()), len(g.edges()))
 
     # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
     is_connected = nx.is_connected(g)
@@ -98,10 +102,12 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
     # TODO: validate that all nodes are now of even degree
     # pd.value_counts([e[1] for e in g_aug.degree()])
 
+    logger.debug("All nodes in this geography:\n %s", g.nodes())
+
     # pull popular nodes from the 'node_weights' table
-    logger.debug("Finding node weights for parent geography")
+    logger.debug("Finding weighted nodes for parent geography")
     node_weights = Table('node_weights', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
-    pg_node_query = select([node_weights]).where(node_weights.c.lu_uid == pg_uid).order_by(node_weights.c.weight.desc()).limit(5)
+    pg_node_query = select([node_weights]).where(node_weights.c.lu_uid == pg_uid).order_by(node_weights.c.weight.desc()).limit(node_limit)
     pg_node_conn = ctx.obj['dest_db'].connect()
     pg_node_result = pg_node_conn.execute(pg_node_query)
     pg_nodes = pg_node_result.fetchall()
@@ -111,7 +117,12 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
     shortest_distance = -1
     chosen_circuit = None
     for point in pg_nodes:
-      start_point = literal_eval(point[1])
+      start_point = point[1]
+
+      # make sure this node exists in the node list
+      if not start_point in g.nodes():
+        logger.warning("%s not found in graph, skipping.", start_point)
+        continue
 
       # calculate the eulerian circuit
       # start and end point are assumed to be the same, which may not be the optimal choice
@@ -126,7 +137,12 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
         shortest_distance = circuit_dist
         chosen_circuit = euler_circuit
         logger.debug("%s has shortest distance", start_point)
-      
+    
+    # make sure the graph was actually calculated
+    if shortest_distance == -1:
+      logger.critical("No reasonable circuit found for %s %s", parent_geo, pg_uid)
+      continue
+
     # find the circuit with the shortest distance
     graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
     logger.info("Circuit distance: {0:.2f}".format(shortest_distance))
@@ -157,7 +173,9 @@ def get_shortest_paths_distances(graph, pairs, edge_weight_name):
   logger.debug("get_shortest_paths_distances start")
   distances = {}
   for pair in pairs:
-    distances[pair] = nx.dijkstra_path_length(graph, pair[0], pair[1], weight=edge_weight_name)
+    length = nx.dijkstra_path_length(graph, pair[0], pair[1], weight=edge_weight_name)
+    distances[pair] = length
+    logger.debug("Found distance of %s for pair %s", length, pair)
 
   logger.debug("get_shortest_paths_distances end")
   return distances
@@ -171,6 +189,7 @@ def create_complete_graph(pair_weights, flip_weights=True):
   for k, v in pair_weights.items():
     wt_i = - v if flip_weights else v
     g.add_edge(k[0], k[1], **{'distance': v, 'weight': wt_i})
+    logger.debug("Added edge %s <-> %s", k[0], k[1])
   
   logger.debug("create_complete_graph end")
   return g
@@ -189,6 +208,7 @@ def add_augmented_path_to_graph(graph, min_weight_pairs):
   # use a MultiGraph to allow for parallel edges
   graph_aug = nx.MultiGraph(graph.copy())
   for pair in min_weight_pairs:
+    logger.debug("Augmenting graph with %s <-> %s", pair[0], pair[1])
     graph_aug.add_edge(pair[0],
                       pair[1],
                       **{'distance': nx.dijkstra_path_length(graph, pair[0], pair[1]),
