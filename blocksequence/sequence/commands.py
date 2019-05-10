@@ -136,7 +136,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
       if circuit_dist < shortest_distance or shortest_distance == -1:
         shortest_distance = circuit_dist
         chosen_circuit = euler_circuit
-        logger.debug("%s has shortest distance", start_point)
+        logger.debug("%s is now shortest distance", start_point)
     
     # make sure the graph was actually calculated
     if shortest_distance == -1:
@@ -289,7 +289,7 @@ def create_eulerian_circuit(graph_augmented, graph_original, weight_field_name, 
     
     # this is not an augmented path, just append it to the circuit
     if edge_data[0].get('bf_type') != 'augmented':
-      logger.debug("%s is not augmented, keeping in the circuit", edge_data)
+      # logger.debug("%s is not augmented, keeping in the circuit", edge_data)
       edge_att = graph_original[edge[0]][edge[1]]
       # appends a tuple to the final circuit
       euler_circuit.append((edge[0], edge[1], edge_att))
