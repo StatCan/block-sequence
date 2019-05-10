@@ -159,7 +159,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     edge_sequence.sort_values(by='sequence', inplace=True)
     
     # write the edge list to the outputs db
-    edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'])
+    edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'], if_exists='replace', index=False)
 
     logger.debug('sequence end')
 
@@ -221,16 +221,21 @@ def add_augmented_path_to_graph(graph, min_weight_pairs):
 
 def create_cpp_edgelist(euler_circuit):
   """
-  Create the edgelist without parallel edge for the visualization
-  Combine duplicate edges and keep track of their sequence and # of walks
+  Create the edgelist.
+
+  Combine duplicate edges and keep track of their sequence and number of walks.
+
   Parameters:
       euler_circuit: list[tuple] from create_eulerian_circuit
   """
 
   logging.debug("create_cpp_edgelist start")
   cpp_edgelist = {}
+  preferred_side_field = os.getenv('SEQ_BF_SIDE_FIELD')
+  preferred_side_value = os.getenv('SEQ_BF_SIDE_PREFERRED')
 
   for i, e in enumerate(euler_circuit):
+    logger.debug("processing edge %s", i)
     edge   = frozenset([e[0], e[1]])
     
     # each edge can have multiple paths (L/R), so number accordingly
@@ -239,15 +244,21 @@ def create_cpp_edgelist(euler_circuit):
       # label the right edge with the sequence number
       # this implements the 'right hand rule'
       for j, bf in enumerate(cpp_edgelist[edge][2]):
-        if cpp_edgelist[edge][2][j]['ARC_SIDE'] == 'R':
+        if cpp_edgelist[edge][2][j][preferred_side_field] == preferred_side_value:
           cpp_edgelist[edge][2][j]['sequence'] = i
-          cpp_edgelist[edge][2][j]['visits'] = 1 # shouldn't be hardcoded
+          if 'visits' in cpp_edgelist[edge][2][j]:
+            cpp_edgelist[edge][2][j]['visits'] += 1
+          else:
+            cpp_edgelist[edge][2][j]['visits'] = 1
     else:
       # label the other edge with a sequence number
       for j, bf in enumerate(cpp_edgelist[edge][2]):
         if not cpp_edgelist[edge][2][j].get('sequence'):
           cpp_edgelist[edge][2][j]['sequence'] = i
-          cpp_edgelist[edge][2][j]['visits'] = 1 # shouldn't be hardcoded
+          if 'visits' in cpp_edgelist[edge][2][j]:
+            cpp_edgelist[edge][2][j]['visits'] += 1
+          else:
+            cpp_edgelist[edge][2][j]['visits'] = 1
           continue
 
   logging.debug("create_cpp_edgelist end")
@@ -258,7 +269,9 @@ def flatten_edgelist(edgelist):
   """Turn a MultiGraph edge list into a flattened list."""
 
   logging.debug("flatten_edgelist start")
+
   for multiedge in edgelist:
+    logger.debug("FLattening %s", multiedge)
     source = multiedge[0]
     target = multiedge[1]
     for edge in multiedge[2]:
