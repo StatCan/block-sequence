@@ -34,11 +34,17 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
 
   # build a DataFrame from the database
   logger.debug("Building dataframe from BF list")
+
+  # grab a copy of the edge table
+  edge_table = Table(bf_tbl, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  edge_table_query = select([edge_table])
+  # the user only wants to focus on a given parent geography
   if pid:
-    sql = "SELECT * FROM {} WHERE {}={}".format(bf_tbl, parent_geo, pid)
-  else:
-    sql = "SELECT * FROM {}".format(bf_tbl)
-  all_edges = pd.read_sql(sql, con=ctx.obj['src_db'])
+    edge_table_query.where(edge_table.columns[parent_geo_uid] == pid)
+
+  all_edges = pd.read_sql(edge_table_query, con=ctx.obj['src_db'], coerce_float=False)
+  # prevent pandas from storing numeric IDs as floats
+  all_edges[parent_geo_uid] = all_edges[parent_geo_uid].astype(int)
 
   # group the edges by parent geo UID
   logger.debug("Grouping edges by parent geography")
@@ -55,7 +61,8 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
     logger.debug("Graph is fully connected: %s", is_connected)
     if not is_connected:
       logger.error("Disconnected graph found. Unable to route.")
-      sys.exit(1)
+      continue
+      #sys.exit(1)
 
     # find nodes of odd degree (dead ends)
     logger.info("Finding nodes of odd degree in graph")
@@ -92,8 +99,13 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid):
     # pd.value_counts([e[1] for e in g_aug.degree()])
 
     # pull popular nodes from the 'node_weights' table
+    logger.debug("Finding node weights for parent geography")
     node_weights = Table('node_weights', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
-    pg_nodes = select([node_weights]).where(node_weights.c.lu_uid == pg_uid).order_by(node_weights.c.weight.desc()).limit(5)
+    pg_node_query = select([node_weights]).where(node_weights.c.lu_uid == pg_uid).order_by(node_weights.c.weight.desc()).limit(5)
+    pg_node_conn = ctx.obj['dest_db'].connect()
+    pg_node_result = pg_node_conn.execute(pg_node_query)
+    pg_nodes = pg_node_result.fetchall()
+    logger.info("Calcuting best route from %s nodes", len(pg_nodes))
 
     # iterate the start points, calculating the circuit
     shortest_distance = -1
