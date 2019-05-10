@@ -271,15 +271,17 @@ def flatten_edgelist(edgelist):
   logging.debug("flatten_edgelist start")
 
   for multiedge in edgelist:
-    logger.debug("FLattening %s", multiedge)
-    source = multiedge[0]
-    target = multiedge[1]
+    source = literal_eval(multiedge[0])
+    target = literal_eval(multiedge[1])
+    logger.debug("Flatting edge %s -> %s", source, target)
+
     for edge in multiedge[2]:
       edge_attribs = multiedge[2][edge]
       edge_attribs['source_x'] = source[0]
       edge_attribs['source_y'] = source[1]
       edge_attribs['target_x'] = target[0]
       edge_attribs['target_y'] = target[1]
+      logger.debug("New edge: %s", edge_attribs)
       yield edge_attribs
   
   logging.debug("flatten_edgelist end")
