@@ -105,6 +105,7 @@ def order_blocks(ctx, cid):
   edge_sequence = pd.read_sql(edge_select, con=ctx.obj['src_db'])
 
   # group the blocks by the child geo ID
+  logger.debug("Grouping blocks by %s", cid)
   grouped = edge_sequence.groupby(cid, sort=False)
   block_order = 1
   for name, group in grouped:
@@ -113,9 +114,12 @@ def order_blocks(ctx, cid):
     block_order += 1
   
   # calculate the chain ID
+  logger.debug("Calculating chain ID field")
   edge_sequence['chain_id'] = np.where(edge_sequence['edge_order'] == 1, 1, 0)
 
-  edge_sequence.to_sql('ordered_sequence', con=ctx.obj['dest_db'])
+  output_table_name = 'ordered_sequence'
+  logger.debug("Saving block order to %s table", output_table_name)
+  edge_sequence.to_sql(output_table_name, con=ctx.obj['dest_db'])
 
   logger.debug('order_blocks ended')
 
