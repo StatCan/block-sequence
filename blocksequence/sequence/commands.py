@@ -276,21 +276,27 @@ def create_eulerian_circuit(graph_augmented, graph_original, weight_field_name, 
   """Create the eulerian path using only edges from the original graph."""
 
   logging.debug("create_eulerian_circuit start")
+
   euler_circuit = []
+
+  logger.debug("Building naive circuit through augmented graph from %s", start_node)
   naive_circuit = list(nx.eulerian_circuit(graph_augmented, source=start_node))
+  logger.debug("Naive circuit has %s edges", len(naive_circuit))
   
   for edge in naive_circuit:
     # get the original edge data
     edge_data = graph_augmented.get_edge_data(edge[0], edge[1])
     
     # this is not an augmented path, just append it to the circuit
-    if edge_data[0].get('trail') != 'augmented':
+    if edge_data[0].get('bf_type') != 'augmented':
+      logger.debug("%s is not augmented, keeping in the circuit", edge_data)
       edge_att = graph_original[edge[0]][edge[1]]
       # appends a tuple to the final circuit
       euler_circuit.append((edge[0], edge[1], edge_att))
       continue
   
     # edge is augmented, find the shortest 'real' route
+    logger.debug("Augmented path found, calculating shortest path between nodes")
     aug_path = nx.shortest_path(graph_original, edge[0], edge[1], weight=weight_field_name)
     aug_path_pairs = list(zip(aug_path[:-1], aug_path[1:]))
 
