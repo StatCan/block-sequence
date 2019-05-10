@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @click.argument('parent_layer', envvar='SEQ_PARENT_LAYER')
 @click.argument('parent_uid', envvar='SEQ_PARENT_UID')
 @click.pass_context
-def sp_weights(ctx, parent_layer, parent_uid):
+def node_weights(ctx, parent_layer, parent_uid):
   """Assess the weight of each node in an parent geography.
   
   Parent geography boundaries are used to calculate potential start points for routing through
@@ -24,7 +24,7 @@ def sp_weights(ctx, parent_layer, parent_uid):
   geographies, making it more desirable to use.
   """
 
-  logger.debug("sp_weights start")
+  logger.debug("node_weights start")
 
   # get every parent geography in the dataset
   logger.debug("Getting %s layer data", parent_layer)
@@ -51,7 +51,7 @@ def sp_weights(ctx, parent_layer, parent_uid):
   logger.debug("Saving to node_weights table")
   coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'], if_exists='replace', index=False)
 
-  logger.debug("sp_weights end")
+  logger.debug("node_weights end")
 
 def get_circuit_distance(circuit, length_field):
   """Compute the total distance for a complete eulerian circuit."""
