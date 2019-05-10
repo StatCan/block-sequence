@@ -156,7 +156,8 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     # flatten an edge list into a final sequence and write to db
     logger.debug("Flattening edge list into final sequence")
     edge_sequence = pd.DataFrame.from_records(flatten_edgelist(cpp_edgelist))
-    edge_sequence.sort_values(by='sequence', inplace=True)
+    # don't waste time sorting - the DB can do that
+    # edge_sequence.sort_values(by='sequence', inplace=True)
     
     # write the edge list to the outputs db
     edge_sequence.to_sql('edge_sequence', con=ctx.obj['dest_db'], if_exists='replace', index=False)
