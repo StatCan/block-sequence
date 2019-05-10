@@ -41,9 +41,9 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 
   # configure logging on the database engine to match our logger
   # sqlalchemy returns full results with debug, so avoid going to that level
-  log_level = logger.getEffectiveLevel()
-  if log_level == logging.DEBUG:
-    log_level +=  10
+  log_level = logger.getEffectiveLevel() + 10
+  if log_level == logging.CRITICAL:
+    log_level -=  10
   logging.getLogger('sqlalchemy.engine').setLevel(log_level)
 
   # attach DB information to the context
