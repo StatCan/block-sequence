@@ -147,7 +147,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
     logger.info("Circuit distance: {0:.2f}".format(shortest_distance))
     logger.info("Graph distance: {0:.2f}".format(graph_distance))
-    logger.info("Solution is {0:.2f}% efficient".format(graph_distance / chosen_circuit))
+    logger.info("Solution is {0:.2f}% efficient".format(graph_distance / shortest_distance))
 
     # use the chosen circuit to generate an edge list
     logger.debug("Getting edge list for circuit")
