@@ -100,9 +100,9 @@ def order_blocks(ctx, cid):
 
   # pull the edge sequence out of the database
   logger.debug("Reading from edge_sequence table")
-  edge_table = Table('edge_sequence', meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  edge_table = Table('edge_sequence', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
   edge_select = select([edge_table])
-  edge_sequence = pd.read_sql(edge_select, con=ctx.obj['src_db'])
+  edge_sequence = pd.read_sql(edge_select, con=ctx.obj['dest_db'])
 
   # group the blocks by the child geo ID
   logger.debug("Grouping blocks by %s", cid)
