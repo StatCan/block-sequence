@@ -121,7 +121,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
 
       # make sure this node exists in the node list
       if not start_point in g.nodes():
-        logger.warning("%s not found in graph, skipping.", start_point)
+        logger.warning("Node %s not found in graph, skipping.", start_point)
         continue
 
       # calculate the eulerian circuit
@@ -322,6 +322,8 @@ def create_eulerian_circuit(graph_augmented, graph_original, weight_field_name, 
     for edge_aug in aug_path_pairs:
         edge_aug_att = graph_original[edge_aug[0]][edge_aug[1]]
         euler_circuit.append((edge_aug[0], edge_aug[1], edge_aug_att))
+  
+  logger.debug("Eulerian circuit has %s edges", len(euler_circuit))
   
   logging.debug("create_eulerian_circuit end")
   return euler_circuit
