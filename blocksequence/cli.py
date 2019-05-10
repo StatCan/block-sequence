@@ -28,7 +28,7 @@ load_dotenv()
 def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   """Sequence a road network through a geography to aid in enumeration."""
 
-  logger.debug("blocksequence start")
+  logger.debug("cli.main start")
 
   # ensure that ctx.obj exists and is a dict
   ctx.ensure_object(dict)
@@ -52,7 +52,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
     'dest_db': dest_conn
   }
 
-  logger.debug("blocksequence end")
+  logger.debug("cli.main end")
 
 # add subcommands
 main.add_command(utils.node_weights)
