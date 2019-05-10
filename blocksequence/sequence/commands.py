@@ -54,7 +54,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
   logger.debug("Grouping edges by parent geography")
   pg_grouped = all_edges.groupby(parent_geo_uid)
   for pg_uid, pg_group in pg_grouped:
-    logger.debug("Working on parent geography: %s", pg_uid)
+    logger.info("Working on parent geography: %s", pg_uid)
 
     # build a graph from the edge list in the DataFrame
     g = nx.convert_matrix.from_pandas_edgelist(pg_group, 'start_node', 'end_node', True, nx.MultiGraph)
@@ -111,7 +111,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     pg_node_conn = ctx.obj['dest_db'].connect()
     pg_node_result = pg_node_conn.execute(pg_node_query)
     pg_nodes = pg_node_result.fetchall()
-    logger.info("Calcuting best route from %s nodes", len(pg_nodes))
+    logger.debug("Calculating best route from %s nodes", len(pg_nodes))
 
     # iterate the start points, calculating the circuit
     shortest_distance = -1
@@ -140,7 +140,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     
     # make sure the graph was actually calculated
     if shortest_distance == -1:
-      logger.critical("No reasonable circuit found for %s %s", parent_geo, pg_uid)
+      logger.critical("No possible circuit found for %s %s using %s start nodes", parent_geo, pg_uid, node_limit)
       continue
 
     # find the circuit with the shortest distance
