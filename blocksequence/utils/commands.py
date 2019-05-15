@@ -132,7 +132,13 @@ def start_points(ctx, pgeo):
   
   logger.debug('start_points begin')
 
-  sp = pd.read_sql("SELECT block_order, bf_uid, edge_order, lb_uid, source_x, source_y, arc_side, startnodenumber, ngd_uid, lu_uid FROM ordered_sequence WHERE edge_order = 1", ctx.obj['dest_db'])
+  # sqlalchemy setup
+  meta = MetaData()
+
+  os_table = Table('ordered_sequence', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
+  os_table_query = select([os_table], os_table.c.edge_order == 1)
+  sp = pd.read_sql(os_table_query, ctx.obj['dest_db'])
+  
   # seems like a waste of time - maybe rename the columns?
   sp['x'] = sp['source_x']
   sp['y'] = sp['source_y']
@@ -140,11 +146,13 @@ def start_points(ctx, pgeo):
   # add a t_flag field
   sp['t_flag'] = None
 
-  # add the ngd_uid - just pulled it from the sql query, since it's on the edge sequence table already
+  # set the LUID
+  pgeo_table = Table(pgeo, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  pgeo_table_query = select([pgeo_table.c.luid, pgeo_table.c.lu_uid])
+  lu_info = pd.read_sql(pgeo_table_query, con=ctx.obj['src_db'])
 
-  # set the LUID (LU_UID was brought in from SQL)
-  lu_info = pd.read_sql("SELECT luid, lu_uid FROM {}".format(pgeo), con=ctx.obj['src_db'])
-  sp['luid'] = lu_info.loc[lu_info['lu_uid'] == sp['lu_uid']]
+  # join onto the start points
+  sp = sp.merge(lu_info, on='lu_uid', how='left')
 
   sp.to_sql('start_points', con=ctx.obj['dest_db'])
 
