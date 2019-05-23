@@ -100,7 +100,11 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     logger.debug("Edge count in augmented graph: %s", len(g_aug.edges()))
 
     # TODO: validate that all nodes are now of even degree
-    # pd.value_counts([e[1] for e in g_aug.degree()])
+    logger.info("Validating that nodes are of even degree")
+    odd_values = [v for v,d in g_aug.degree() if d % 2 == 1]
+    if odd_values:
+      logger.error("Odd degree values found, exiting")
+      return
 
     logger.debug("All nodes in this geography:\n %s", g.nodes())
 
