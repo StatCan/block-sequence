@@ -99,7 +99,7 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     g_aug = add_augmented_path_to_graph(g, odd_matching)
     logger.debug("Edge count in augmented graph: %s", len(g_aug.edges()))
 
-    # TODO: validate that all nodes are now of even degree
+    # validate that all nodes are now of even degree
     logger.info("Validating that nodes are of even degree")
     odd_values = [v for v,d in g_aug.degree() if d % 2 == 1]
     if odd_values:
