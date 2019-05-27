@@ -159,7 +159,7 @@ def start_points(ctx, pgeo):
   logger.debug('start_points end')
 
 @click.command()
-@click.argument('pgeo', envvar='SEQ_PARENT_LAYER')
+@click.argument('pgeo', envvar='SEQ_CHILD_LAYER')
 @click.argument('roads', envvar='SEQ_ROAD_LAYER')
 @click.pass_context
 def t_intersections(ctx, pgeo, roads):
@@ -167,19 +167,34 @@ def t_intersections(ctx, pgeo, roads):
 
   logger.debug("t_intersections start")
 
-  poly = gpd.GeoDataFrame.from_postgis("SELECT geom, ngd_uid FROM {}".format(pgeo), con=ctx.obj['src_db'])
-  roads = gpd.GeoDataFrame.from_postgis("SELECT geom, ngd_uid FROM {}".format(roads), con=ctx.obj['src_db'])
+  # hold onto sqlalchemy metadata
+  meta = MetaData()
+
+  logger.debug("Loading %s table from DB", pgeo)
+  poly_tbl = Table(pgeo, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  poly_tbl_query = select([poly_tbl.c.lb_uid, poly_tbl.c.geom])
+  poly_df = gpd.GeoDataFrame.from_postgis(poly_tbl_query, con=ctx.obj['src_db'])
+
+  logger.debug("Loading %s table from DB", pgeo)
+  roads_tbl = Table(roads, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  roads_tbl_query = select([roads_tbl.c.ngd_uid, roads_tbl.c.geom], roads_tbl.c.sgmnt_typ_cde == 2)
+  roads_df = gpd.GeoDataFrame.from_postgis(roads_tbl_query, con=ctx.obj['src_db'])
 
   # needs to test the boundary of the polygon, not the polygon itself
-  poly_edges = list(poly.geometry.boundary)
-  roads['is_t'] = roads[roads['SGMNT_TYP_CDE'] == 2].geometry.apply(lambda r: forms_t(r, poly_edges))
+  poly_edges = list(poly_df.geometry.boundary)
+  logger.debug("Finding T intersections for %s boundaries", len(poly_edges))
+  roads_df['is_t'] = roads_df.geometry.apply(lambda r: forms_t(r, poly_edges))
 
-  roads[roads['is_t'] == True].to_sql('t_intersection', con=ctx.obj['dest_db'])
+  tbl_name = 't_intersection'
+  logger.debug("Saving to %s table", tbl_name)
+  roads_df[roads_df['is_t'] == True].to_sql(tbl_name, con=ctx.obj['dest_db'])
 
   logger.debug('t_intersections end')
 
 def forms_t(arc, edges):
   """Check if arc forms a T intersection with the provided edge list."""
+
+  # logger.debug("forms_t start")
 
   is_t = False
   for edge in edges:
@@ -187,5 +202,7 @@ def forms_t(arc, edges):
       is_t = True
       # bail on match, no point in finding more
       break
+  # logger.debug("T intersection found: %s", is_t)
   
+  # logger.debug("forms_t end")
   return is_t
