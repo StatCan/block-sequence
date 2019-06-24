@@ -53,6 +53,8 @@ def sequence(ctx, bf_tbl, weight_field, parent_geo, parent_geo_uid, pid, node_li
     edge_table = Table(bf_tbl, meta, autoload=True, autoload_with=ctx.obj['src_db'])
 
     # process the parent geographies one at a time
+    # grabbing every parent geo at once could create memory issues on the system, so they are grabbed only 
+    # as required.
     for pgeo in session.query(edge_table.c[parent_geo_uid]).distinct():
       # queries return a tuple representing the row. Grab the geo uid from the first column
       edgelist.append(sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pgeo[0], weight_field, node_limit))
