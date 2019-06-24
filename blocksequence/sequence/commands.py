@@ -142,7 +142,7 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   odd_values = [v for v,d in g_aug.degree() if d % 2 == 1]
   if odd_values:
     logger.error("Odd degree values found, exiting")
-    return
+    return []
   
   # to aide in debugging, dump the current node list
   logger.debug("All nodes in this geography:\n %s", g.nodes())
@@ -189,7 +189,7 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   # make sure the graph was actually calculated
   if shortest_distance == -1:
     logger.critical("No possible circuit found for %s %s using %s start nodes", parent_geo_uid, pid, node_limit)
-    return
+    return []
   
   # find the circuit with the shortest distance
   graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
