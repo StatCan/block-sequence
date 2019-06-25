@@ -91,7 +91,7 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   DESTSession = scoped_session(sessionmaker(bind=dest_db))
   dest_session = DESTSession()
 
-  logger.info("Sequencing %s = %s", parent_geo_uid, pid)
+  logger.info("Sequencing %s %s", parent_geo_uid, pid)
 
   # grab a copy of the edge table for this geography
   edge_table = Table(bf_tbl, meta, autoload=True, autoload_with=src_db)
@@ -104,14 +104,42 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   g = nx.convert_matrix.from_pandas_edgelist(all_edges, 'start_node', 'end_node', True, nx.MultiGraph)
   logger.debug("MultiGraph with %s nodes and %s edges built for %s", len(g.nodes()), len(g.edges()), pid)
 
+  flat_edgelist = []
+
   # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
   is_connected = nx.is_connected(g)
   logger.debug("%s graph is fully connected: %s", pid, is_connected)
   if not is_connected:
-    logger.error("Disconnected graph found for %s. Unable to route.", pid)
-    return []
-    #sys.exit(1)
-  
+    logger.error("Disconnected graph found for %s. Sequencing subgraphs.", pid)
+    for comp in nx.connected_components(g):
+      g_sub = g.subgraph(comp)
+      flat_edgelist.extend(sequence_edges(g_sub, dest_db, parent_geo_uid, pid, weight_field, node_limit))
+  else:
+    flat_edgelist = sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit)
+
+  # leverage pandas to write all the edge data to the database
+  logger.debug("Generating dataframe for %s", pid)
+  edge_sequence = pd.DataFrame.from_records(flat_edgelist)
+  # don't waste time sorting - the DB can do that
+  # edge_sequence.sort_values(by='sequence', inplace=True)
+
+  # write the edge list to the outputs db
+  logger.info("Writing %s %s sequence results to database", parent_geo_uid, pid)
+  edge_sequence.to_sql('edge_sequence', con=dest_db, if_exists='append', index=False)
+
+  logger.debug('sequenc_geo end')
+  return pid
+
+
+def sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit):
+  """Generate a sequence of edges for the given graph."""
+
+  logger.debug("sequence_edges start")
+
+  meta = MetaData()
+  DESTSession = scoped_session(sessionmaker(bind=dest_db))
+  dest_session = DESTSession()
+
   # find nodes of odd degree (dead ends)
   logger.info("Finding nodes of odd degree in graph for %s", pid)
   nodes_odd_degree = [v for v,d in g.degree() if d % 2 == 1]
@@ -186,7 +214,7 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
 
     # total distance
     circuit_dist = sum([edge[2][0][weight_field] for edge in euler_circuit])
-    logger.info("Circuit distance for from %s: %s", pid, start_point, circuit_dist)
+    logger.info("Circuit distance for %s from %s: %s", pid, start_point, circuit_dist)
     if circuit_dist < shortest_distance or shortest_distance == -1:
       shortest_distance = circuit_dist
       chosen_circuit = euler_circuit
@@ -199,9 +227,9 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   
   # find the circuit with the shortest distance
   graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
-  logger.info("{} Circuit distance: {0:.2f}".format(pid, shortest_distance))
-  logger.info("{} Graph distance: {0:.2f}".format(pid, graph_distance))
-  logger.info("{} Solution is {0:.2f}% efficient".format(pid, (graph_distance / shortest_distance) * 100))
+  logger.info("{0} Circuit distance: {1:.2f}".format(pid, shortest_distance))
+  logger.info("{0} Graph distance: {1:.2f}".format(pid, graph_distance))
+  logger.info("{0} Solution is {1:.2f}% efficient".format(pid, (graph_distance / shortest_distance) * 100))
 
   # use the chosen circuit to generate an edge list
   logger.debug("Getting edge list for %s %s circuit", parent_geo_uid, pid)
@@ -211,19 +239,8 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   logger.debug("Flattening edge list for %s into final sequence", pid)
   flat_edgelist = flatten_edgelist(cpp_edgelist)
 
-  # leverage pandas to write all the edge data to the database
-  logger.debug("Generating dataframe for %s", pid)
-  edge_sequence = pd.DataFrame.from_records(flat_edgelist)
-  # don't waste time sorting - the DB can do that
-  # edge_sequence.sort_values(by='sequence', inplace=True)
-
-  # write the edge list to the outputs db
-  logger.info("Writing %s %s sequence results to database", parent_geo_uid, pid)
-  edge_sequence.to_sql('edge_sequence', con=dest_db, if_exists='append', index=False)
-
-  logger.debug('sequenc_geo end')
-  return pid
-
+  logger.debug("sequence_edges end")
+  return flat_edgelist
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):
   """Compute the shortest distance between each pair of nodes in a graph.
