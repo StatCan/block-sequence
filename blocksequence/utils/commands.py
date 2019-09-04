@@ -56,7 +56,7 @@ def node_weights(ctx, parent_layer, parent_uid):
   
   # write it all to sqlite for reference by later steps
   logger.debug("Saving to node_weights table")
-  coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'], if_exists='replace', index=False)
+  pgeo.to_sql('node_weights', con=ctx.obj['dest_db'], if_exists='replace', index=False)
 
   logger.debug("node_weights end")
 
