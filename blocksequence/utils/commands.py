@@ -40,28 +40,32 @@ def node_weights(ctx, parent_layer, parent_uid):
   # pull out the nodes in the polygons
   logger.debug("Calculating node coordinates for every polygon")
   pgeo['coords'] = pgeo.geometry.boundary.apply(lambda x: x[0].coords)
-  sp = pgeo[[parent_uid, 'coords']]
-  d = []
-  for r in sp.iterrows():
-    k = r[1][0]
-    v = r[1][1]
-    # logger.debug("%s has %s", k, v)
-    for i in v:
-      x, y = i
-      c = (round(x, 4), round(y, 4))
-      # logger.debug("Adding node %s to %s", c, k)
-      d.append((k,c))
-  coord_pop = pd.DataFrame(d, columns=[parent_uid, 'node'])
+
+  # limit to the number of columns we really need
+  pgeo = pgeo.filter([parent_uid, 'coords'])
+
+  # generate node IDs from coordinate pairs
+  pgeo['node'] = pgeo['coord'].apply(lambda c: get_coord_node(c))
+
   logger.debug("Grouping nodes to determine popularity")
-  coord_pop['weight'] = coord_pop.groupby(['node'])[parent_uid].transform('count')
+  pgeo['weight'] = pgeo.groupby(['node'])[parent_uid].transform('count')
+
   # cast the node to str for writing to the db
-  coord_pop['node'] = coord_pop['node'].astype(str)
+  pgeo['node'] = pgeo['node'].astype(str)
+  pgeo = pgeo.drop('coord', axis=1)
   
   # write it all to sqlite for reference by later steps
   logger.debug("Saving to node_weights table")
   coord_pop.to_sql('node_weights', con=ctx.obj['dest_db'], if_exists='replace', index=False)
 
   logger.debug("node_weights end")
+
+def get_coord_node(coord):
+  """Create a node identifier from a coordinate pair."""
+  x = coord[0]
+  y = coord[1]
+  c = (round(x, 4), round(y, 4))
+  return c
 
 def get_circuit_distance(circuit, length_field):
   """Compute the total distance for a complete eulerian circuit."""
@@ -88,9 +92,10 @@ def get_node_count(g):
   return len(g.nodes())
 
 @click.command()
+@click.argument('pid', envvar='SEQ_PARENT_UID')
 @click.argument('cid', envvar='SEQ_CHILD_UID')
 @click.pass_context
-def order_blocks(ctx, cid):
+def order_blocks(ctx, pid, cid):
   """Calculate the block ordering based on the edge sequence."""
 
   logger.debug('order_blocks started')
@@ -105,13 +110,16 @@ def order_blocks(ctx, cid):
   edge_sequence = pd.read_sql(edge_select, con=ctx.obj['dest_db'])
 
   # group the blocks by the child geo ID
-  logger.debug("Grouping blocks by %s", cid)
-  grouped = edge_sequence.groupby(cid, sort=False)
-  block_order = 1
-  for name, group in grouped:
-    edge_sequence.loc[edge_sequence[cid] == name, 'block_order'] = block_order
-    edge_sequence.loc[edge_sequence[cid] == name, 'edge_order'] = range(1, len(group)+1)
-    block_order += 1
+  logger.debug(f"Grouping blocks by {pid} and {cid}")
+  grouped = edge_sequence.groupby([pid, cid], sort=True)
+
+  # calculate the block order
+  logger.debug("Calculating the block order")
+  edge_sequence['block_order'] = grouped.ngroup()+1
+
+  # calculate the edge order within the blocks
+  logger.debug("Calculating edge order")
+  edge_sequence['edge_order'] = grouped.cumcount()+1
   
   # calculate the chain ID
   logger.debug("Calculating chain ID field")
