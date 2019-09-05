@@ -109,17 +109,13 @@ def order_blocks(ctx, pid, cid):
   edge_select = select([edge_table])
   edge_sequence = pd.read_sql(edge_select, con=ctx.obj['dest_db'])
 
-  # group the blocks by the child geo ID
-  logger.debug(f"Grouping blocks by {pid} and {cid}")
-  grouped = edge_sequence.groupby([pid, cid], sort=True)
-
   # calculate the block order
   logger.debug("Calculating the block order")
-  edge_sequence['block_order'] = grouped.ngroup()+1
+  edge_sequence = edge_sequence.groupby(pid, sort=True).apply(sub_block_order, {key:cid})
 
   # calculate the edge order within the blocks
   logger.debug("Calculating edge order")
-  edge_sequence['edge_order'] = grouped.cumcount()+1
+  edge_sequence['edge_order'] = edge_sequence.groupby([pid, cid], sort=True).cumcount()+1
   
   # calculate the chain ID
   logger.debug("Calculating chain ID field")
@@ -131,6 +127,12 @@ def order_blocks(ctx, pid, cid):
 
   logger.debug('order_blocks ended')
 
+def sub_block_order(data, key='lb_uid'):
+  """Takes a DataFrame grouped by a parent geography and creates an ID number for the order in which they appear."""
+
+  grp = data.groupby(key)
+  data['block_order'] = grp.ngroup()+1
+  return data
 
 @click.command()
 @click.argument('pgeo', envvar='SEQ_PARENT_LAYER')
