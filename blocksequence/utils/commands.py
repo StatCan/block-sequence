@@ -111,7 +111,7 @@ def order_blocks(ctx, pid, cid):
 
   # calculate the block order
   logger.debug("Calculating the block order")
-  edge_sequence = edge_sequence.groupby(pid, sort=True).apply(sub_block_order, {key:cid})
+  edge_sequence = edge_sequence.groupby(pid, sort=True).apply(sub_block_order, {'key':cid})
 
   # calculate the edge order within the blocks
   logger.debug("Calculating edge order")
