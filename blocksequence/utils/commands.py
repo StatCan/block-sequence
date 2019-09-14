@@ -87,48 +87,6 @@ def get_node_count(g):
   logger.debug('getting node count for graph')
   return len(g.nodes())
 
-@click.command()
-@click.argument('pid', envvar='SEQ_PARENT_UID')
-@click.argument('cid', envvar='SEQ_CHILD_UID')
-@click.pass_context
-def order_blocks(ctx, pid, cid):
-  """Calculate the block ordering based on the edge sequence."""
-
-  logger.debug('order_blocks started')
-
-  # sqlalchemy setup
-  meta = MetaData()
-
-  # pull the edge sequence out of the database
-  logger.debug("Reading from edge_sequence table")
-  edge_table = Table('edge_sequence', meta, autoload=True, autoload_with=ctx.obj['dest_db'])
-  edge_select = select([edge_table])
-  edge_sequence = pd.read_sql(edge_select, con=ctx.obj['dest_db'])
-
-  # calculate the block order
-  logger.debug("Calculating the block order")
-  edge_sequence = edge_sequence.groupby(pid, sort=True).apply(sub_block_order, {'key':cid})
-
-  # calculate the edge order within the blocks
-  logger.debug("Calculating edge order")
-  edge_sequence['edge_order'] = edge_sequence.groupby([pid, cid], sort=True).cumcount()+1
-  
-  # calculate the chain ID
-  logger.debug("Calculating chain ID field")
-  edge_sequence['chain_id'] = np.where(edge_sequence['edge_order'] == 1, 1, 0)
-
-  output_table_name = 'ordered_sequence'
-  logger.debug("Saving block order to %s table", output_table_name)
-  edge_sequence.to_sql(output_table_name, con=ctx.obj['dest_db'])
-
-  logger.debug('order_blocks ended')
-
-def sub_block_order(data, key='lb_uid'):
-  """Takes a DataFrame grouped by a parent geography and creates an ID number for the order in which they appear."""
-
-  grp = data.groupby(key)
-  data['block_order'] = grp.ngroup()+1
-  return data
 
 @click.command()
 @click.argument('pgeo', envvar='SEQ_PARENT_LAYER')
