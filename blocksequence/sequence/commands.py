@@ -8,6 +8,7 @@ import sys
 
 import click
 import networkx as nx
+import numpy as np
 import pandas as pd
 import psycopg2
 from sqlalchemy.ext.automap import automap_base
@@ -104,24 +105,21 @@ def sequence_geo(src_url, dest_url, bf_tbl, parent_geo_uid, pid, weight_field, n
   g = nx.convert_matrix.from_pandas_edgelist(all_edges, 'start_node', 'end_node', True, nx.MultiGraph)
   logger.debug("MultiGraph with %s nodes and %s edges built for %s", len(g.nodes()), len(g.edges()), pid)
 
-  flat_edgelist = []
-
   # ensure the graph is connected, otherwise it can't be made into a eulerian circuit
   is_connected = nx.is_connected(g)
   logger.debug("%s graph is fully connected: %s", pid, is_connected)
   if not is_connected:
     logger.error("Disconnected graph found for %s. Sequencing subgraphs.", pid)
-    for comp in nx.connected_components(g):
-      g_sub = g.subgraph(comp)
-      flat_edgelist.extend(sequence_edges(g_sub, dest_db, parent_geo_uid, pid, weight_field, node_limit))
+    all_edges = pd.concat([sequence_edges(g.subgraph(comp), dest_db, parent_geo_uid, pid, weight_field, node_limit) for comp in nx.connected_components(g)])
+    # for comp in nx.connected_components(g):
+    #   g_sub = g.subgraph(comp)
+    #   edgelist.append(sequence_edges(g_sub, dest_db, parent_geo_uid, pid, weight_field, node_limit))
   else:
-    flat_edgelist = sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit)
+    all_edges = sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit)
 
-  # leverage pandas to write all the edge data to the database
-  logger.debug("Generating dataframe for %s", pid)
-  edge_sequence = pd.DataFrame.from_records(flat_edgelist)
-  # don't waste time sorting - the DB can do that
-  # edge_sequence.sort_values(by='sequence', inplace=True)
+  all_edges['edge_order'] = all_edges.sort_values('seq').groupby('block', sort=False).cumcount()+1
+  all_edges['block_order'] = all_edges.sort_values('seq').groupby('block', sort=False).ngroup()+1
+  all_edges['chain_id'] = np.where(all_edges['eo'] == 1, 1, 0)
 
   # write the edge list to the outputs db
   logger.info("Writing %s %s sequence results to database", parent_geo_uid, pid)
@@ -223,7 +221,13 @@ def sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit):
   # make sure the graph was actually calculated
   if shortest_distance == -1:
     logger.critical("No possible circuit found for %s %s using %s start nodes", parent_geo_uid, pid, node_limit)
-    return []
+    return pd.DataFrame()
+  
+  # set the sequence on the graph
+  for i, e in enumerate(nx.eulerian_circuit(g)):
+    set_edge_sequence(g, e, i)
+  
+  return nx.to_pandas_edgelist(g)
   
   # find the circuit with the shortest distance
   graph_distance = sum(nx.get_edge_attributes(g, weight_field).values())
@@ -241,6 +245,27 @@ def sequence_edges(g, dest_db, parent_geo_uid, pid, weight_field, node_limit):
 
   logger.debug("sequence_edges end")
   return flat_edgelist
+
+def set_edge_sequence(graph, edge, seq):
+  """Set a sequence value on the given graph edge."""
+
+  # get the number of edges in this set
+  sides = graph.number_of_edges(edge[0], edge[1])
+
+  # iterate the edges, marking the first one we see with the sequence
+  for s in range(sides):
+    # get the data for this edge
+    data = graph.get_edge_data(edge[0],edge[1],s)
+
+    # if this one has already been seen, skip it
+    if 'seq' in data:
+      continue
+
+    # set the sequence on this edge
+    graph[edge[0]][edge[1]][s]['seq'] = seq
+
+    # after marking an edge, bail to avoid putting the same sequence on more than one edge
+    return
 
 def get_shortest_paths_distances(graph, pairs, edge_weight_name):
   """Compute the shortest distance between each pair of nodes in a graph.
