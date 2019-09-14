@@ -33,39 +33,35 @@ def node_weights(ctx, parent_layer, parent_uid):
 
   # get every parent geography in the dataset
   logger.debug("Getting %s layer data", parent_layer)
-  pgeo_table = Table(parent_layer, meta, autoload=True, autoload_with=ctx.obj['src_db'])
+  pgeo_table = Table(parent_layer, meta, autoload=True, autoload_with=ctx.obj['db'])
   pgeo_select = select([pgeo_table.c[parent_uid], pgeo_table.c.geom])
-  pgeo = gpd.GeoDataFrame.from_postgis(pgeo_select, ctx.obj['src_db'])
 
-  # pull out the nodes in the polygons
-  logger.debug("Calculating node coordinates for every polygon")
-  pgeo['coords'] = pgeo.geometry.boundary.apply(lambda x: x[0].coords)
-
-  # limit to the number of columns we really need
-  pgeo = pgeo.filter([parent_uid, 'coords'])
-
-  # generate node IDs from coordinate pairs
-  pgeo['node'] = pgeo['coord'].apply(lambda c: get_coord_node(c))
+  # get all the boundaries from the parent geography and grab the node coordinates
+  pgeo = (gpd.GeoDataFrame.from_postgis(pgeo_select, ctx.obj['db'])
+            .pipe(get_coords)
+            .drop('geom', axis=1))
 
   logger.debug("Grouping nodes to determine popularity")
   pgeo['weight'] = pgeo.groupby(['node'])[parent_uid].transform('count')
 
   # cast the node to str for writing to the db
   pgeo['node'] = pgeo['node'].astype(str)
-  pgeo = pgeo.drop('coord', axis=1)
   
-  # write it all to sqlite for reference by later steps
+  # write it all to for reference by later steps
   logger.debug("Saving to node_weights table")
-  pgeo.to_sql('node_weights', con=ctx.obj['dest_db'], if_exists='replace', index=False)
+  pgeo.to_sql('node_weights', con=ctx.obj['db'], if_exists='replace', index=False)
 
   logger.debug("node_weights end")
 
-def get_coord_node(coord):
-  """Create a node identifier from a coordinate pair."""
-  x = coord[0]
-  y = coord[1]
-  c = (round(x, 4), round(y, 4))
-  return c
+def get_coords(df):
+  """Pull the coordinate value out from each node in a polygon geometry."""
+  df['node'] = df.geometry.boundary.apply(lambda x: round_coords(x[0].coords))
+  return df
+
+def round_coords(coord_pair, precision=5):
+  x = round(coord_pair[0], precision)
+  y = round(coord_pair[1], precision)
+  return (x,y)
 
 def get_circuit_distance(circuit, length_field):
   """Compute the total distance for a complete eulerian circuit."""
