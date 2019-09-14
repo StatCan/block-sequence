@@ -21,8 +21,8 @@ load_dotenv()
 @click.option('--source_db', envvar='SEQ_SOURCE_DB', help="Source database name")
 @click.option('--source_user', envvar='SEQ_SOURCE_USER', help="Source DB username")
 @click.option('--source_pass', envvar='SEQ_SOURCE_PASS', help="Source DB password")
-@click.option('--outdb', envvar='SEQ_OUTPUT', default='sequencing.sqlite', 
-  type=click.Path(dir_okay=False, resolve_path=True),
+@click.option('--outdb', envvar='SEQ_OUTPUT', default='.', 
+  type=click.Path(dir_okay=True, file_okay=False, resolve_path=True),
   help="Output SQLite database filename")
 @click.pass_context
 def main(ctx, source_host, source_db, source_user, source_pass, outdb):
