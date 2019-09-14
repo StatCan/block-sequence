@@ -21,11 +21,11 @@ load_dotenv()
 @click.option('--source_db', envvar='SEQ_SOURCE_DB', help="Source database name")
 @click.option('--source_user', envvar='SEQ_SOURCE_USER', help="Source DB username")
 @click.option('--source_pass', envvar='SEQ_SOURCE_PASS', help="Source DB password")
-@click.option('--outdb', envvar='SEQ_OUTPUT', default='.', 
+@click.option('--out', envvar='SEQ_OUTPUT', default='.', 
   type=click.Path(dir_okay=True, file_okay=False, resolve_path=True),
-  help="Output SQLite database filename")
+  help="Output directory for data files")
 @click.pass_context
-def main(ctx, source_host, source_db, source_user, source_pass, outdb):
+def main(ctx, source_host, source_db, source_user, source_pass, out):
   """Sequence a road network through a geography to aid in enumeration."""
 
   logger.debug("cli.main start")
@@ -34,10 +34,8 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
   ctx.ensure_object(dict)
 
   # initiate the source and output database connections and store those in the context
-  logger.debug("Source DB: {} as {} on {}".format(source_db, source_user, source_host))
-  src_conn = create_engine('postgresql://{user}:{password}@{host}/{db}'.format(db=source_db, user=source_user, password=source_pass, host=source_host))
-  logger.debug("Output DB: {}".format(outdb))
-  dest_conn = create_engine('sqlite:///{}'.format(outdb), echo=False)
+  logger.debug(f"DB: {source_db} as {source_user} on {source_host}")
+  conn = create_engine(f'postgresql://{source_user}:{source_pass}@{source_host}/{source_db}')
 
   # configure logging on the database engine to match our logger
   # sqlalchemy returns full results with debug, so avoid going to that level
@@ -48,8 +46,7 @@ def main(ctx, source_host, source_db, source_user, source_pass, outdb):
 
   # attach DB information to the context
   ctx.obj = {
-    'src_db': src_conn,
-    'dest_db': dest_conn
+    'db': conn,
   }
 
   logger.debug("cli.main end")
