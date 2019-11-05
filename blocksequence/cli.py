@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 
 from .utils import commands as utils
 from .sequence import commands as sequence
+from .blocksequence import BlockSequence
 
 logger = logging.getLogger()
 click_log.basic_config(logger)
@@ -127,6 +128,25 @@ def get_start_node(line):
 def get_end_node(line):
   coord = line.coords[-1]
   return (coord[0], coord[1])
+
+
+@click.command()
+@click.argument('parent_geography', envvar='SEQ_PARENT_LAYER')
+@click.argument('parent_geography_uid_field', envvar='SEQ_PARENT_UID')
+@click.argument('child_geography_uid_field', envvar='SEQ_CHILD_UID')
+@click.pass_context
+def sequence_blocks(ctx, parent_geography, parent_geography_uid_field, child_geography_uid_field):
+
+    # load the edge list from the database
+    edges = pd.read_sql_table('edge_list', ctx['dest_conn'])
+
+    # group the edges by the parent geography
+    pgeo_group = edges.groupby(by=parent_geography_uid_field, sort=False)
+    # iterate each geography, calculating a eulerian circuit and writing it to the database
+    for group_id, group in pgeo_group:
+        bs = BlockSequence(group, 'start_node_id', 'end_node_id')
+        bs_df = bs.eulerian_circuit(child_geography_uid_field)
+        bs_df.to_sql('sequence', ctx['dest_conn'], if_exists='append')
 
 
 def start():
