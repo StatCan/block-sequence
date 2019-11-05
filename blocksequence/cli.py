@@ -132,6 +132,9 @@ def sequence_blocks(ctx, parent_geography, parent_geography_uid_field, child_geo
         bs_df = bs.eulerian_circuit(child_geography_uid_field)
         bs_df.to_sql('sequence', ctx['dest_db'], if_exists='append')
 
+# register the commands
+main.add_command(create_edge_list)
+main.add_command(sequence_blocks)
 
 def start():
   main(obj={})
