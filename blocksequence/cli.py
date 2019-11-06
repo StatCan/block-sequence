@@ -127,14 +127,14 @@ def get_end_node(line):
 def sequence_blocks(ctx, parent_geography, parent_geography_uid_field, child_geography_uid_field):
 
     # load the edge list from the database
-    edges = pd.read_sql_table('edge_list', ctx['dest_conn'])
+    edges = pd.read_sql_table('edge_list', ctx.obj['dest_db'])
 
     # group the edges by the parent geography
-    pgeo_group = edges.groupby(by=parent_geography_uid_field, sort=False)
+    pgeo_group = edges.groupby(by=parent_geography_uid_field.lower(), sort=False)
     # iterate each geography, calculating a eulerian circuit and writing it to the database
     for group_id, group in pgeo_group:
         bs = BlockSequence(group, 'start_node_id', 'end_node_id')
-        bs_df = bs.eulerian_circuit(child_geography_uid_field)
+        bs_df = bs.eulerian_circuit(child_geography_uid_field.lower())
         bs_df.to_sql('sequence', ctx.obj['dest_db'], if_exists='append')
 
 # register the commands
