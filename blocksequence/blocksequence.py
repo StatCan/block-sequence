@@ -133,6 +133,8 @@ class BlockSequence:
         # generate a dataframe from the graph to be given back, sorted by the sequence
         circuit_df = nx.to_pandas_edgelist(circuit_graph).sort_values('sequence')
 
+        return circuit_df
+
 
     def _calculate_block_order(self, df, group_field):
         """Calculate the block_order and edge_order values for the given dataframe.
