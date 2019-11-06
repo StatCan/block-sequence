@@ -93,8 +93,8 @@ def create_edge_list(ctx, gpkg, parent_geography, parent_geography_uid_field, ch
   edge_gdf['end_node_x'], edge_gdf['end_node_y'] = np.vectorize(get_end_node)(edge_gdf['geometry'])
 
   # generate IDs to use for the coordinates, instead of the coordinates themselves
-  edge_gdf['start_node'] = edge_gdf[['start_node_x', 'start_node_y']].apply(lambda x: (x[0], x[1]))
-  edge_gdf['end_node'] = edge_gdf[['end_node_x', 'end_node_y']].apply(lambda x: (x[0], x[1]))
+  edge_gdf['start_node'] = list(zip(edge_gdf['start_node_x'], edge_gdf['start_node_y']))
+  edge_gdf['end_node'] = list(zip(edge_gdf['end_node_x'], edge_gdf['end_node_y']))
   coord_set = frozenset(edge_gdf['start_node']).union(edge_gdf['end_node'])
   coord_lookup = dict(zip(coord_set, range(1, len(coord_set) + 1)))
   del coord_set
@@ -102,7 +102,7 @@ def create_edge_list(ctx, gpkg, parent_geography, parent_geography_uid_field, ch
   # assign the IDs
   edge_gdf['start_node_id'] = edge_gdf['start_node'].map(coord_lookup)
   edge_gdf['end_node_id'] = edge_gdf['end_node'].map(coord_lookup)
-  edge_gdf.drop(['start_node', 'end_node'], axis=1)
+  edge_gdf = edge_gdf.drop(['start_node', 'end_node'], axis=1)
 
   # convert our GeoDataFrame to a normal dataframe to be written out
   edges = pd.DataFrame(edge_gdf.drop('geometry', axis=1))
