@@ -85,6 +85,9 @@ def create_edge_list(ctx, gpkg, parent_geography, parent_geography_uid_field, ch
   edge_gdf = (line_df.merge(edge_df, on='ngd_uid', sort=False)
               .merge(block_df, on=child_geography_uid_field.lower(), sort=False, copy=False))
 
+  # store the length of the lines for use as the weight field
+  edge_gdf = edge_gdf.assign(length=lambda x: x.length)
+
   # clean up some memory
   del edge_df, line_df, block_df
 
