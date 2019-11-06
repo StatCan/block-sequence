@@ -137,7 +137,7 @@ def sequence_blocks(ctx, parent_geography, parent_geography_uid_field, child_geo
     # iterate each geography, calculating a eulerian circuit and writing it to the database
     for group_id, group in pgeo_group:
         bs = BlockSequence(group, 'start_node_id', 'end_node_id')
-        bs_df = bs.eulerian_circuit(child_geography_uid_field.lower())
+        bs_df = bs.eulerian_circuit(child_geography_uid_field.lower(), edge_field='bf_uid')
         bs_df.to_sql('sequence', ctx.obj['dest_db'], if_exists='append')
 
 # register the commands
