@@ -1,3 +1,4 @@
+import logging
 import networkx as nx
 
 from blocksequence.blocksequence import EdgeOrder
@@ -111,12 +112,15 @@ def test_double_interior_edge():
     assert labels == expected
 
 
-def test_y_branch():
+def test_y_branch(caplog):
     """Test the labelling of edges in a cycle with an edge sticking off it that forms a Y with it's successors.
 
     This ensures that all branches of a set of interior arcs get processed before continuing along the border.
 
     """
+
+    # capture debug logs on failures
+    caplog.set_level(logging.DEBUG)
 
     # create a small graph and label the edges
     g = nx.cycle_graph(5, create_using=nx.MultiGraph)
@@ -152,13 +156,16 @@ def test_y_branch():
     assert labels == expected
 
 
-def test_interior_connecting_arc():
+def test_interior_connecting_arc(caplog):
     """Test the labelling of edges where an interior arc connects two nodes but does not form a new block.
 
     In some instances an interior arc will connect nodes, resulting in a cyclic graph. This tests that the labelling
     traverses one side and comes back before traversing the rest of the block.
 
     """
+
+    # capture debug logs on failure
+    caplog.set_level(logging.DEBUG)
 
     g = nx.MultiGraph()
     g.add_edge(0, 1)
@@ -190,10 +197,15 @@ def test_interior_connecting_arc():
     labels = eo.label_edges()
 
     # the labels that should have been produced
-    expected = {(0, 1, 0): 1, (1, 12, 0): 2, (1, 12, 1): 3, (1, 2, 0): 4, (2, 3, 0): 5,
-               (3, 4, 0): 6, (4, 5, 0): 7, (4, 5, 1): 8, (4, 6, 0): 9, (6, 7, 0): 10,
-               (7, 8, 0): 11, (8, 9, 0): 12, (9, 11, 0): 13, (9, 11, 1): 14, (9, 10, 0): 15,
-               (9, 10, 1): 16, (9, 8, 1): 17, (8, 12, 0): 18, (12, 0, 0): 19}
+    expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 3, 0): 3, (3, 4, 0): 4,
+                # small branch
+                (4, 5, 0): 5, (4, 5, 1): 6,
+                # back to border edges
+                (4, 6, 0): 7, (6, 7, 0): 8, (7, 8, 0): 9,
+                # Y branch
+                (8, 9, 0): 10, (9, 10, 0): 11, (9, 10, 1): 12, (9, 11, 0): 13, (9, 11, 1): 14, (8, 9, 1): 15,
+                # back on border again
+                (8, 12, 0): 16, (12, 1, 0): 17, (12, 1, 1): 18, (12, 0, 0): 19}
 
     assert labels == expected
 
@@ -220,7 +232,7 @@ def test_nonzero_sequence_start():
     g.add_edge(7, 6)
 
     # edge order is going to look for a sequence field to determine the start node
-    seq = {(0, 1, 4): 0, (1, 2, 5): 1, (2, 5, 0): 7, (2, 5, 1): 8, (2, 3, 0): 9, (3, 4, 0): 10, (0, 4, 0): 11}
+    seq = {(0, 1, 0): 4, (1, 2, 0): 5, (2, 5, 0): 7, (2, 5, 1): 8, (2, 3, 0): 9, (3, 4, 0): 10, (0, 4, 0): 11}
     nx.set_edge_attributes(g, seq, 'sequence')
 
     # initialize the edge order and get the labels
@@ -230,5 +242,29 @@ def test_nonzero_sequence_start():
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4, (2, 3, 0): 5, (3, 4, 0): 6, (0, 4, 0): 11,
                 (4, 6, 0): 7, (6, 7, 0): 8, (6, 7, 1): 9, (4, 6, 1): 10}
+
+    assert labels == expected
+
+
+def test_disconnected_graph():
+    """Test a basic graph that is disconnected.
+
+    This is the same idea as an interior edge, but that edge is not connected to any of the border edges."""
+
+    # create a small graph and label the edges
+    g = nx.cycle_graph(5, create_using=nx.MultiGraph)
+    # add the branch edge
+    g.add_edge(6,5)
+    g.add_edge(5,6)
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1, (6, 5, 0): 2, (6, 5, 1): 3, (2, 3, 0): 4, (3, 4, 0): 5, (0, 4, 0): 6}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_edges()
+
+    # the labels that should have been produced
+    expected = {(0, 1, 0): 1, (1, 2, 0): 2, (6, 5, 0): 6, (6, 5, 1): 7, (2, 3, 0): 3, (3, 4, 0): 4, (0, 4, 0): 5}
 
     assert labels == expected
