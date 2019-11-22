@@ -45,6 +45,9 @@ def test_interior_branch():
 
     # create a small graph and label the edges
     g = nx.cycle_graph(5, create_using=nx.MultiGraph)
+    # add the branch edge
+    g.add_edge(2,5)
+    g.add_edge(5,2)
     # edge order is going to look for a sequence field to determine the start node
     seq = {(0, 1, 0): 0, (1, 2, 0): 1, (2, 5, 0): 2, (2, 5, 1): 3, (2, 3, 0): 4, (3, 4, 0): 5, (0, 4, 0): 6}
     nx.set_edge_attributes(g, seq, 'sequence')
