@@ -1,4 +1,6 @@
+import collections
 import itertools
+import logging
 
 import networkx as nx
 import pandas as pd
@@ -269,3 +271,207 @@ class BlockSequence:
                 euler_circuit.append((edge_aug[0], edge_aug[1], edge_aug_att))
 
         return euler_circuit
+
+class EdgeOrder:
+    """Given a graph and a start point, label each edge with an order in which it should be enumerated if walking every
+    edge in the graph."""
+
+    def __init__(self, graph, seq_start=1):
+
+        logging.debug("Initializing edge order on graph")
+        self.graph = graph
+        self.sequence = seq_start
+
+        self.missed_edges = collections.deque()
+        self.labels = {}
+
+        if nx.is_connected(self.graph):
+            logging.info("Graph is disconnected. Edge order should be verified.")
+
+
+    def _sort_edges_by_node(self, start, ends):
+        """Sort the edges connected to a node based on the number of edges connected to each node in ends.
+
+        This produces a list of edges connected to the start node, sorted from highest edge count to lowest.
+        """
+
+        logging.debug("Counting edges connected to %s", start)
+
+        edge_counts = {}
+        for end in ends:
+            edge_counts[(start, end)] = self.graph.number_of_edges(start, end)
+        sorted_edges = sorted(edge_counts.items(), key=lambda kv: kv[1], reverse=True)
+        logging.debug("Edge counts: %s", sorted_edges)
+        return sorted_edges
+
+
+    def _node_intersects_missed_edge(self, node):
+        """Check if the given node intersects any of the edges that were marked as missed."""
+
+        logging.debug("Looking for %s in missed edges", node)
+        # look for the node in the missed edges list
+        for ed in self.missed_edges:
+            if (node in ed):
+                logging.debug("Found %s as intersecting edge", ed)
+                return ed
+
+        logging.debug("No intersecting edge found.")
+        return None
+
+
+    def _apply_sequence_to_edge(self, u, v, k):
+        """Generate a label for the given edge, applying the current sequence value and increasing the sequence
+        counter by 1.
+        """
+
+
+        edge_label = (u, v, k)
+        self.labels[edge_label] = self.sequence
+        logging.debug("Labelling {} as {}".format(edge_label, self.sequence))
+
+        self.sequence += 1
+
+
+    def _apply_sequence_to_edges(self, u, v):
+        """Iterate all the edges between the start and end node, labelling them with a sequence value based on their
+        order of appearance within the graph.
+
+        Labels that already exist from the graph as skipped without increasing the sequence counter.
+        """
+
+        edge_count = self.graph.number_of_edges(u, v)
+        logging.debug("Applying sequence to %s edges from %s to %s", edge_count, u, v)
+        for k in range(edge_count):
+            edge_label = (u, v, k)
+
+            # skip anything that's already been seen
+            if edge_label in self.labels:
+                logging.debug("%s already labelled, skipping", edge_label)
+                continue
+
+            self._apply_sequence_to_edge(u, v, k)
+
+
+    def _get_start_node_for_first_edge(self, graph, key='sequence'):
+        """Find the first edge and return the start node for it."""
+
+        logging.debug("Looking for start node based on %s", key)
+        attribs = nx.get_edge_attributes(graph, key)
+        start_node = None
+        seg_num = -1
+        for edge, val in attribs.items():
+            # sequence numbers don't always start at 0, so need to find the lowest number and go from there.
+            if val < seg_num or seg_num == -1:
+                seg_num = val
+                start_node = edge[0]
+
+        # return the start node for the edge
+        logging.debug("Found %s as the starting node with %s = %s", start_node, key, seg_num)
+        return start_node
+
+
+    def label_edges(self):
+        """Label all the edges in the graph with a sequence number, starting from the given first edge.
+
+        This results is a dictionary of labels that can then be applied to the graph. It does not set the labels on the
+        graph itself.
+
+        Graphs can be disconnected, meaning not all edges have an obvious way between them. This is handled by working
+        through the connected components of the graph from the largest to the smallest. No consideration is given to
+        this problem, and the sequence number just keeps incrementing. This means some components can be spatially
+        far apart and have seemingly non-sensical sequence values.
+        """
+
+        # work on each connected component of the graph from largest to smallest
+        # for fully connected graphs, there will only be one component
+        for comp in sorted(nx.connected_components(self.graph), key=len, reverse=True):
+            graph_component = self.graph.subgraph(comp)
+            start_node = self._get_start_node_for_first_edge(graph_component)
+
+            # find all the successors from the start node using a depth first search
+            logging.debug("Searching for successors from %s", start_node)
+            successors = nx.dfs_successors(graph_component, start_node)
+            logging.debug("Successors: %s", successors)
+
+            logging.debug("Walking the edges in the graph")
+            for node in successors:
+                start = node
+                ends = successors[node]
+                logging.debug("Traversing from node %s", start)
+
+                edge_counts = self._sort_edges_by_node(start, ends)
+
+                # process each edge
+                for edge_nodes, count in edge_counts:
+                    logging.debug("Processing edges between %s", edge_nodes)
+                    u, v = edge_nodes
+
+                    # if the end node has children, and there are two edges, mark this
+                    # to be processed later
+                    if (v in successors) and (count > 1):
+                        # only do one edge and move down stream
+                        self._apply_sequence_to_edge(u, v, 0)
+
+                        logging.debug("%s has children and multiple edges. Marking to come back later.", v)
+                        self.missed_edges.append(edge_nodes)
+
+                        logging.debug("Moving to next node")
+                        break
+
+                    # sequence all the edges we are on right now (both sides of the road
+                    self._apply_sequence_to_edges(u, v)
+
+                    # # see if all the successor nodes have been consumed before moving on to missed edges
+                    # logger.debug("Looking for more work to do before evaluating missed edges")
+                    # more_nodes_flag = False
+                    # for successor in ends:
+                    #     successor_edge = (start, successor, 0)
+                    #     if successor_edge not in self.labels:
+                    #         logger.debug("Found more successors to process from %s", u)
+                    #         # set the flag and move on to the next nodes
+                    #         more_nodes_flag = True
+                    #         break
+                    # # avoid checking for missed nodes if there was more to do here
+                    # if more_nodes_flag:
+                    #     logger.debug("More edges to be processed before carrying on")
+                    #     continue
+                    # else:
+                    #     logger.debug("No more unseen edges to process.")
+
+                    # check if there are missed edges to backtrack over
+                    logging.debug("Looking for any previously missed edges that may intersect %s", u)
+                    missed_edge = self._node_intersects_missed_edge(u)
+                    if missed_edge:
+                        logging.debug("Found missed edge %s. Applying sequence label.", missed_edge)
+                        self._apply_sequence_to_edges(missed_edge[0], missed_edge[1])
+                        logging.debug("Marking missed edge as complete")
+                        self.missed_edges.remove(missed_edge)
+
+            # return edges that connect to the original start point won't be capture
+            # in the check for successors, so do them here
+            logging.debug("Checking for missed return edge from %s", start_node)
+            return_edges = graph_component.edges(nbunch=start_node)
+            logging.debug("Evaluating %s edges as possible return path", len(return_edges))
+            # look for any that aren't labeled
+            for re in return_edges:
+                edge_count = graph_component.number_of_edges(re[0], re[1])
+                for edge_num in range(edge_count):
+                    edge_id = (re[0], re[1], edge_num)
+                    # skip any that have already been seen
+                    if edge_id in self.labels:
+                        logging.debug("%s is already labelled, so not a return edge", edge_id)
+                        continue
+                    # set the sequence on missing connections
+                    self._apply_sequence_to_edge(re[0], re[1], edge_num)
+
+            # if any edges were missed, assign them a sequence value
+            # this is not a desired state and would ideally never need to happen
+            for edge in graph_component.edges:
+                # skip anything that has been seen
+                if edge in self.labels:
+                    continue
+                logging.warning("Applying out of order sequence to %s", edge)
+                self._apply_sequence_to_edge(edge[0], edge[1], edge[2])
+
+        # return all the labels with the sequence counts applied
+        return self.labels
