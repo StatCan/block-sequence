@@ -285,7 +285,7 @@ class EdgeOrder:
         self.missed_edges = collections.deque()
         self.labels = {}
 
-        if nx.is_connected(self.graph):
+        if not nx.is_connected(self.graph):
             logging.info("Graph is disconnected. Edge order should be verified.")
 
 
