@@ -150,3 +150,49 @@ def test_y_branch():
                 (0, 4, 0): 13}
 
     assert labels == expected
+
+
+def test_interior_connecting_arc():
+    """Test the labelling of edges where an interior arc connects two nodes but does not form a new block.
+
+    In some instances an interior arc will connect nodes, resulting in a cyclic graph. This tests that the labelling
+    traverses one side and comes back before traversing the rest of the block.
+
+    """
+
+    g = nx.MultiGraph()
+    g.add_edge(0, 1)
+    g.add_edge(1, 2)
+    g.add_edge(2, 3)
+    g.add_edge(3, 4)
+    g.add_edge(4, 5)
+    g.add_edge(5, 4)
+    g.add_edge(4, 6)
+    g.add_edge(6, 7)
+    g.add_edge(7, 8)
+    g.add_edge(8, 9)
+    g.add_edge(9, 8)
+    g.add_edge(9, 10)
+    g.add_edge(10, 9)
+    g.add_edge(9, 11)
+    g.add_edge(11, 9)
+    g.add_edge(8, 12)
+    g.add_edge(12, 0)
+    g.add_edge(12, 1)
+    g.add_edge(1, 12)
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1, (2, 3, 0): 4, (3, 4, 0): 5, (0, 4, 0): 6}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_edges()
+
+    # the labels that should have been produced
+    expected = {(0, 1, 0): 1, (1, 12, 0): 2, (1, 12, 1): 3, (1, 2, 0): 4, (2, 3, 0): 5,
+               (3, 4, 0): 6, (4, 5, 0): 7, (4, 5, 1): 8, (4, 6, 0): 9, (6, 7, 0): 10,
+               (7, 8, 0): 11, (8, 9, 0): 12, (9, 11, 0): 13, (9, 11, 1): 14, (9, 10, 0): 15,
+               (9, 10, 1): 16, (9, 8, 1): 17, (8, 12, 0): 18, (12, 0, 0): 19}
+
+    assert labels == expected
