@@ -476,4 +476,5 @@ class EdgeOrder:
                 self._apply_sequence_to_edge(edge[0], edge[1], edge[2])
 
         # return all the labels with the sequence counts applied
+        logging.debug("Final labels: %s", self.labels)
         return self.labels
