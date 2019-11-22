@@ -369,6 +369,29 @@ class EdgeOrder:
         logging.debug("Found %s as the starting node with %s = %s", start_node, key, seg_num)
         return start_node
 
+    def _phantom_successors(self, graph, node, known_ends):
+        """Look for edges that form connections between nodes which aren't represented in successors."""
+
+        logging.debug("Looking for connections not listed in successors to %s.", node)
+
+        edges_from_node = graph.edges(nbunch=node)
+        connected_nodes = set([u for u,v in edges_from_node])
+
+        unseen_connections = connected_nodes - set(known_ends)
+        logging.debug("Found %s phantom successors: %s", len(unseen_connections), unseen_connections)
+
+        # it is possible that the nodes are from skipped edges, so check for that
+        skipped_edges = set()
+        for connection in unseen_connections:
+            skipped_edge = self._node_intersects_missed_edge(connection)
+            if skipped_edge:
+                logging.debug("Node %s is actually a missed edge, removing", connection)
+                skipped_edges.add(connection)
+        unseen_connections = unseen_connections - skipped_edges
+
+        logging.debug("Final %s phantom successors: %s", len(unseen_connections), unseen_connections)
+        return unseen_connections
+
 
     def label_edges(self):
         """Label all the edges in the graph with a sequence number, starting from the given first edge.
@@ -413,7 +436,7 @@ class EdgeOrder:
                         # only do one edge and move down stream
                         self._apply_sequence_to_edge(u, v, 0)
 
-                        logging.debug("%s has children and multiple edges. Marking to come back later.", v)
+                        logging.debug("Node %s has children and multiple edges. Marking to come back later.", v)
                         self.missed_edges.append(edge_nodes)
 
                         logging.debug("Moving to next node in successors")
@@ -440,31 +463,36 @@ class EdgeOrder:
                     else:
                         logging.debug("No more unseen edges to process.")
 
+                    # look for a phantom successor (node we've already crossed over, but is connected to u)
+                    phantoms = self._phantom_successors(graph_component, u, ends)
+                    for phantom_end in phantoms:
+                        self._apply_sequence_to_edges(u, phantom_end)
+
                     # check if there are missed edges to backtrack over
                     logging.debug("Looking for any previously missed edges that may intersect %s", u)
                     missed_edge = self._node_intersects_missed_edge(u)
                     if missed_edge:
                         logging.debug("Found missed edge %s. Applying sequence label.", missed_edge)
                         self._apply_sequence_to_edges(missed_edge[0], missed_edge[1])
-                        logging.debug("Marking missed edge as complete")
+                        logging.debug("Marking missed edge %s as complete", missed_edge)
                         self.missed_edges.remove(missed_edge)
 
-            # return edges that connect to the original start point won't be capture
-            # in the check for successors, so do them here
-            logging.debug("Checking for missed return edge from %s", start_node)
-            return_edges = graph_component.edges(nbunch=start_node)
-            logging.debug("Evaluating %s edges as possible return path", len(return_edges))
-            # look for any that aren't labeled
-            for re in return_edges:
-                edge_count = graph_component.number_of_edges(re[0], re[1])
-                for edge_num in range(edge_count):
-                    edge_id = (re[0], re[1], edge_num)
-                    # skip any that have already been seen
-                    if edge_id in self.labels:
-                        logging.debug("%s is already labelled, so not a return edge", edge_id)
-                        continue
-                    # set the sequence on missing connections
-                    self._apply_sequence_to_edge(re[0], re[1], edge_num)
+            # # return edges that connect to the original start point won't be capture
+            # # in the check for successors, so do them here
+            # logging.debug("Checking for missed return edge from %s", start_node)
+            # return_edges = graph_component.edges(nbunch=start_node)
+            # logging.debug("Evaluating %s edges as possible return path", len(return_edges))
+            # # look for any that aren't labeled
+            # for re in return_edges:
+            #     edge_count = graph_component.number_of_edges(re[0], re[1])
+            #     for edge_num in range(edge_count):
+            #         edge_id = (re[0], re[1], edge_num)
+            #         # skip any that have already been seen
+            #         if edge_id in self.labels:
+            #             logging.debug("%s is already labelled, so not a return edge", edge_id)
+            #             continue
+            #         # set the sequence on missing connections
+            #         self._apply_sequence_to_edge(re[0], re[1], edge_num)
 
             # if any edges were missed, assign them a sequence value
             # this is not a desired state and would ideally never need to happen
