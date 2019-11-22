@@ -289,7 +289,7 @@ class EdgeOrder:
             logging.info("Graph is disconnected. Edge order should be verified.")
 
 
-    def _sort_edges_by_node(self, start, ends):
+    def _sort_edges_by_count(self, start, ends):
         """Sort the edges connected to a node based on the number of edges connected to each node in ends.
 
         This produces a list of edges connected to the start node, sorted from highest edge count to lowest.
@@ -399,9 +399,10 @@ class EdgeOrder:
                 ends = successors[node]
                 logging.debug("Traversing from node %s", start)
 
-                edge_counts = self._sort_edges_by_node(start, ends)
+                edge_counts = self._sort_edges_by_count(start, ends)
 
                 # process each edge
+                logging.debug("Iterating each edge")
                 for edge_nodes, count in edge_counts:
                     logging.debug("Processing edges between %s", edge_nodes)
                     u, v = edge_nodes
@@ -415,28 +416,29 @@ class EdgeOrder:
                         logging.debug("%s has children and multiple edges. Marking to come back later.", v)
                         self.missed_edges.append(edge_nodes)
 
-                        logging.debug("Moving to next node")
+                        logging.debug("Moving to next node in successors")
                         break
 
                     # sequence all the edges we are on right now (both sides of the road
+                    logging.debug("No successors found, labelling all edges between %s", edge_nodes)
                     self._apply_sequence_to_edges(u, v)
 
-                    # # see if all the successor nodes have been consumed before moving on to missed edges
-                    # logger.debug("Looking for more work to do before evaluating missed edges")
-                    # more_nodes_flag = False
-                    # for successor in ends:
-                    #     successor_edge = (start, successor, 0)
-                    #     if successor_edge not in self.labels:
-                    #         logger.debug("Found more successors to process from %s", u)
-                    #         # set the flag and move on to the next nodes
-                    #         more_nodes_flag = True
-                    #         break
-                    # # avoid checking for missed nodes if there was more to do here
-                    # if more_nodes_flag:
-                    #     logger.debug("More edges to be processed before carrying on")
-                    #     continue
-                    # else:
-                    #     logger.debug("No more unseen edges to process.")
+                    # see if all the successor nodes have been consumed before moving on to missed edges
+                    logging.debug("Looking for more work to do before evaluating missed edges")
+                    more_nodes_flag = False
+                    for successor in ends:
+                        successor_edge = (start, successor, 0)
+                        if successor_edge not in self.labels:
+                            logging.debug("Found more successors to process from %s", u)
+                            # set the flag and move on to the next nodes
+                            more_nodes_flag = True
+                            break
+                    # avoid checking for missed nodes if there was more to do here
+                    if more_nodes_flag:
+                        logging.debug("More edges to be processed before carrying on")
+                        continue
+                    else:
+                        logging.debug("No more unseen edges to process.")
 
                     # check if there are missed edges to backtrack over
                     logging.debug("Looking for any previously missed edges that may intersect %s", u)
