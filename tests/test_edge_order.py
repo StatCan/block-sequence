@@ -196,3 +196,39 @@ def test_interior_connecting_arc():
                (9, 10, 1): 16, (9, 8, 1): 17, (8, 12, 0): 18, (12, 0, 0): 19}
 
     assert labels == expected
+
+
+def test_nonzero_sequence_start():
+    """Test the labelling of edges when the sequence number doesn't start with zero.
+
+    It is possible that when the edges in a child geography are grouped that the starting edge will have a sequence
+    value that is higher than zero.
+
+    """
+
+    # create a small graph and label the edges
+    g = nx.cycle_graph(5, create_using=nx.MultiGraph)
+
+    # add the first branch edge
+    g.add_edge(2,5)
+    g.add_edge(5,2)
+
+    # add the second branch edges
+    g.add_edge(4, 6)
+    g.add_edge(6, 4)
+    g.add_edge(6, 7)
+    g.add_edge(7, 6)
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 4): 0, (1, 2, 5): 1, (2, 5, 0): 7, (2, 5, 1): 8, (2, 3, 0): 9, (3, 4, 0): 10, (0, 4, 0): 11}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_edges()
+
+    # the labels that should have been produced
+    expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4, (2, 3, 0): 5, (3, 4, 0): 6, (0, 4, 0): 11,
+                (4, 6, 0): 7, (6, 7, 0): 8, (6, 7, 1): 9, (4, 6, 1): 10}
+
+    assert labels == expected
