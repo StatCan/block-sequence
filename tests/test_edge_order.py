@@ -18,7 +18,7 @@ def test_basic_cycle():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 3, 0): 3, (3, 4, 0): 4, (0, 4, 0): 5}
@@ -41,7 +41,7 @@ def test_basic_path():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 3, 0): 3, (3, 4, 0): 4}
@@ -67,7 +67,7 @@ def test_interior_branch():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4, (2, 3, 0): 5, (3, 4, 0): 6, (0, 4, 0): 7}
@@ -103,7 +103,7 @@ def test_double_interior_edge():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4, (2, 3, 0): 5, (3, 4, 0): 6, (0, 4, 0): 11,
@@ -145,7 +145,7 @@ def test_y_branch(caplog):
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4,
@@ -194,7 +194,7 @@ def test_interior_connecting_arc(caplog):
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 3, 0): 3, (3, 4, 0): 4,
@@ -205,7 +205,7 @@ def test_interior_connecting_arc(caplog):
                 # Y branch
                 (8, 9, 0): 10, (9, 10, 0): 11, (9, 10, 1): 12, (9, 11, 0): 13, (9, 11, 1): 14, (8, 9, 1): 15,
                 # back on border again
-                (8, 12, 0): 16, (12, 1, 0): 17, (12, 1, 1): 18, (12, 0, 0): 19}
+                (8, 12, 0): 16, (1, 12, 0): 17, (1, 12, 1): 18, (0, 12, 0): 19}
 
     assert labels == expected
 
@@ -237,7 +237,7 @@ def test_nonzero_sequence_start():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (2, 5, 0): 3, (2, 5, 1): 4, (2, 3, 0): 5, (3, 4, 0): 6, (0, 4, 0): 11,
@@ -262,7 +262,7 @@ def test_disconnected_graph():
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
-    labels = eo.label_edges()
+    labels = eo.label_all_edges()
 
     # the labels that should have been produced
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (6, 5, 0): 6, (6, 5, 1): 7, (2, 3, 0): 3, (3, 4, 0): 4, (0, 4, 0): 5}
