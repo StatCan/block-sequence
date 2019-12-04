@@ -108,7 +108,7 @@ class BlockSequence:
         g_aug = self._add_augmented_path_to_graph(graph, odd_matching)
 
         # use the node with the most start points as the first place to start from
-        start_nodes = self._get_preferred_start_nodes(graph, boundary_attr)
+        start_nodes = self._get_preferred_start_nodes(graph)
 
         # calculate the shortest circuit through the graph
         shortest_distance = -1
@@ -228,22 +228,18 @@ class BlockSequence:
 
         return graph_aug
 
-    def _get_preferred_start_nodes(self, graph, boundary_attr):
+    def _get_preferred_start_nodes(self, graph):
         """Generate a list of start points to be used in route evaluations."""
 
-        # get the boundary indicator for every edge in the graph
-        # this will drop any edges that don't have a boundary flag, but if input is properly configured that should be none
-        edges_boundary_flagged = nx.get_edge_attributes(graph, boundary_attr)
-        boundary_edges_only = [n for n in edges_boundary_flagged.keys() if edges_boundary_flagged.get(n) == 'true']
-        boundary_nodes = []
-        # this is a multigraph, so each edge is defined by the nodes plus a view index
-        for n1, n2, index in boundary_edges_only:
-            boundary_nodes.append(n1)
-            boundary_nodes.append(n2)
-        node_bunch = set(boundary_nodes)
+        # boundary arcs are those with only one edge, where interior arcs have two edges.
+        boundary_edges = [e for e in graph.edges() if graph.number_of_edges(e[0], e[1]) == 1]
+        nodes_on_boundary = set()
+        for u, v in boundary_edges:
+            nodes_on_boundary.add(u)
+            nodes_on_boundary.add(v)
 
         # sort the nodes by popularity
-        node_list = sorted(dict(graph.degree(node_bunch)).items(), key=lambda kv: kv[1], reverse=True)
+        node_list = sorted(dict(graph.degree(nbunch=nodes_on_boundary)).items(), key=lambda kv: kv[1], reverse=True)
         # just need the node IDs, not the degree values
         node_list = [n[0] for n in node_list]
 
@@ -402,6 +398,7 @@ class EdgeOrder:
                 # skip all other processing and move on to the next component
                 continue
 
+            # more complicated structure, so work through the successors
             for node in successors:
                 ends = successors[node]
 
