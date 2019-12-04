@@ -290,3 +290,42 @@ def test_interior_donut(caplog):
     expected = {(0,0,0): 1}
 
     assert labels == expected
+
+
+def test_parallel_interior_edges(caplog):
+    """Test a block that has a parallel road running alongside the boundary edge.
+
+    Also includes a crossing interior arc, effectively creating two parallel edge sets.
+    """
+
+    # capture debug logs on failure
+    caplog.set_level(logging.DEBUG)
+
+    # design the graph
+    g = nx.MultiGraph()
+    # first set of edges
+    g.add_edges_from([(0,1), (1,2), (2,3)])
+    # second set of edges
+    g.add_edges_from([(4,5), (5,6), (6,7)])
+    g.add_edges_from([(5,4), (6,5), (7,6)])
+    # third set
+    g.add_edges_from([(8,9), (9,10)])
+    # add interconnections
+    g.add_edges_from([(0,4), (4,8)])
+    g.add_edges_from([(1,5), (5,1)])
+    g.add_edges_from([(3,7), (7,10)])
+    g.add_edges_from([(2,6), (6,9), (6,2), (9,6)])
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    # the expected labels
+    expected = {(0, 1, 0): 1, (1,5,0): 2, (5,4,0): 3, (4,5,1): 4, (5,6,0): 5, (6,9,0): 6, (6,9,1): 7, (6,7,0): 8,
+                (6,7,1): 9, (6,2,0): 10, (2,6,1): 11, (6,5,1): 12, (5,1,1): 13, (1,2,0): 14, (2,3,0): 15, (3,7,0): 16,
+                (7,10,0): 17, (10,9,0): 18, (9,8,0): 19, (8,4,0): 20, (4,0,0): 21}
+
+    assert labels == expected
