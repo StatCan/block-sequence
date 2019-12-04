@@ -268,3 +268,25 @@ def test_disconnected_graph():
     expected = {(0, 1, 0): 1, (1, 2, 0): 2, (6, 5, 0): 6, (6, 5, 1): 7, (2, 3, 0): 3, (3, 4, 0): 4, (0, 4, 0): 5}
 
     assert labels == expected
+
+
+def test_interior_donut(caplog):
+    """Test when a block is formed of a single edge that connects to itself, forming the interior circle of a donut."""
+
+    # capture debug logs on failure
+    caplog.set_level(logging.DEBUG)
+
+    # create a single edge cycle graph
+    g = nx.cycle_graph(1, create_using=nx.MultiGraph)
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 0, 0): 0}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    # the expected labels
+    expected = {(0,0,0): 1}
+
+    assert labels == expected
