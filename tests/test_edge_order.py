@@ -329,3 +329,47 @@ def test_parallel_interior_edges(caplog):
                 (7,10,0): 17, (10,9,0): 18, (9,8,0): 19, (8,4,0): 20, (4,0,0): 21}
 
     assert labels == expected
+
+
+def test_y_branch_start_at_base_of_tree(caplog):
+    """Test the labelling of edges in a cycle with an edge sticking off it that forms a Y with it's successors.
+
+    This ensures that all branches of a set of interior arcs get processed before continuing along the border.
+
+    """
+
+    # capture debug logs on failures
+    caplog.set_level(logging.DEBUG)
+
+    # create a small graph and label the edges
+    g = nx.cycle_graph(5, create_using=nx.MultiGraph)
+
+    # add the first branch edge
+    g.add_edge(2, 5)
+    g.add_edge(5, 2)
+
+    # add the second branch edges
+    g.add_edge(4, 6)
+    g.add_edge(6, 4)
+    # first arm of the Y
+    g.add_edge(6, 7)
+    g.add_edge(7, 6)
+    # second arm of the Y
+    g.add_edge(6,8)
+    g.add_edge(8,6)
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(4, 6, 0): 0, (6, 7, 0): 1, (6, 7, 1): 2, (6, 8, 0): 3, (6, 8, 1): 4, (4, 6, 1): 5}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    # the labels that should have been produced
+    expected = {(0, 1, 0): 8, (1, 2, 0): 9, (2, 5, 0): 10, (2, 5, 1): 11,
+                (2, 3, 0): 12, (3, 4, 0): 13, (4, 6, 0): 1, (6, 7, 0): 2, (6, 7, 1): 3,
+                (6, 8, 0): 4, (6, 8, 1): 5, (4, 6, 1): 6,
+                (0, 4, 0): 7}
+
+    assert labels == expected
