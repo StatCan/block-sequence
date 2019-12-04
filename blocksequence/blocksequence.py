@@ -304,20 +304,6 @@ class EdgeOrder:
         return sorted_edges
 
 
-    def _node_intersects_missed_edge(self, node):
-        """Check if the given node intersects any of the edges that were marked as missed."""
-
-        logging.debug("Looking for %s in missed edges", node)
-        # look for the node in the missed edges list
-        for ed in self.missed_edges:
-            if (node in ed):
-                logging.debug("Found %s as intersecting edge", ed)
-                return ed
-
-        logging.debug("No intersecting edge found.")
-        return None
-
-
     def _apply_sequence_to_edge(self, u, v, k):
         """Generate a label for the given edge, applying the current sequence value and increasing the sequence
         counter by 1.
@@ -380,15 +366,6 @@ class EdgeOrder:
 
         unseen_connections = connected_nodes - set(known_ends)
         logging.debug("Found %s phantom successors: %s", len(unseen_connections), unseen_connections)
-
-        # it is possible that the nodes are from skipped edges, so check for that
-        skipped_edges = set()
-        for connection in unseen_connections:
-            skipped_edge = self._node_intersects_missed_edge(connection)
-            if skipped_edge:
-                logging.debug("Node %s is actually a missed edge, removing", connection)
-                skipped_edges.add(connection)
-        unseen_connections = unseen_connections - skipped_edges
 
         logging.debug("Final %s phantom successors: %s", len(unseen_connections), unseen_connections)
         return unseen_connections
