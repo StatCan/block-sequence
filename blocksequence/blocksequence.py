@@ -378,6 +378,14 @@ class EdgeOrder:
             start_node = self._get_start_node_for_first_edge(graph_component)
 
             successors = nx.dfs_successors(graph_component, start_node)
+            logging.debug("Successors from %s: %s", start_node, successors)
+
+            # sometimes a block is nothing but a self referecing arc, so it has no successors
+            if not successors:
+                logging.debug("No successors found. This looks like a donut hole block.")
+                self._apply_sequence_to_edges(start_node, start_node)
+                # skip all other processing and move on to the next component
+                continue
 
             for node in successors:
                 ends = successors[node]
@@ -393,7 +401,9 @@ class EdgeOrder:
             # that are part of the return connections
 
             # get the last node to be sequenced
-            last_edge = sorted(nx.get_edge_attributes(graph_component, self._es_label).items(), key=lambda t: t[1])[-1][0]
+            sorted_edges = sorted(nx.get_edge_attributes(graph_component, self._es_label).items(), key=lambda t: t[1])
+            logging.debug("Edges seen so far: %s", sorted_edges)
+            last_edge = sorted_edges[-1][0]
             logging.debug("Last edge: %s", last_edge)
             # get the edges connected to that last end node
             u, v, k = last_edge
