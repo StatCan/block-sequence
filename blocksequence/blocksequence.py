@@ -395,7 +395,7 @@ class EdgeOrder:
             successors = nx.dfs_successors(graph_component, start_node)
             logging.debug("Successors from %s: %s", start_node, successors)
 
-            # sometimes a block is nothing but a self referecing arc, so it has no successors
+            # sometimes a block is nothing but a self referencing arc, so it has no successors
             if not successors:
                 logging.debug("No successors found. This looks like a donut hole block.")
                 self._apply_sequence_to_edges(start_node, start_node)
