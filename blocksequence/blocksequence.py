@@ -148,11 +148,26 @@ class BlockSequence:
         # group the data based on the supplied field
         block_group = df.groupby(group_field, sort=False)
 
-        # calculate the edge order
-        df['edge_order'] = block_group.cumcount() + 1
-
         # calculate the block order
         df['block_order'] = block_group.ngroup() + 1
+
+        edge_order_field = 'edge_order'
+        eo_seq = []
+        for block, group in block_group:
+            edge_graph = nx.from_pandas_edgelist(group,
+                                                 source='startnodenum', target='endnodenum',
+                                                 edge_attr=True, create_using=nx.MultiGraph)
+            eo = EdgeOrder(edge_graph)
+            edge_labels = eo.label_all_edges()
+            nx.set_edge_attributes(edge_graph, edge_labels, edge_order_field)
+
+            # dump it back to pandas to be joined to the rest of the data
+            edge_df = nx.to_pandas_edgelist(edge_graph)[['bf_uid', edge_order_field]]
+            eo_seq.append(edge_df)
+
+        # put the edge_order values onto the edges from this geography
+        eo_df = pd.concat(eo_seq)
+        df = df.merge(eo_df, on='bf_uid')
 
         return df
 
