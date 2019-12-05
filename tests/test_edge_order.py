@@ -373,3 +373,29 @@ def test_y_branch_start_at_base_of_tree(caplog):
                 (0, 4, 0): 7}
 
     assert labels == expected
+
+
+def test_internal_lollipop(caplog):
+    """Test a cyclic graph with a non-block forming internal lollipop arc arrangement."""
+
+    # capture debug logs on failures
+    caplog.set_level(logging.DEBUG)
+
+    # create the test graph
+    g = nx.cycle_graph(5, create_using=nx.MultiGraph)
+    # add the lollipop
+    g.add_edges_from([(3,5), (5,3), (5,5), (5,5)])
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    # the labels that should have been produced
+    expected = {(0, 1, 0): 9, (0, 4, 0): 1, (1, 2, 0): 8, (2, 3, 0): 7, (3, 4, 0): 2,
+                (3, 5, 0): 6, (3, 5, 1): 3, (5, 5, 0): 5, (5, 5, 1): 4}
+
+    assert labels == expected
