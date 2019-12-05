@@ -388,6 +388,13 @@ class EdgeOrder:
             graph_component = self.graph.subgraph(comp)
             start_node = self._get_start_node_for_first_edge(graph_component)
 
+            # try to route a eulerian circuit as the simplest solution before trying anything else
+            if nx.is_eulerian(graph_component):
+                logging.debug("Graph is eulerian. Labelling circuit.")
+                for u,v,k in nx.eulerian_circuit(graph_component, source=start_node, keys=True):
+                    self._apply_sequence_to_edge(u,v,k)
+                continue
+
             successors = nx.dfs_successors(graph_component, start_node)
             logging.debug("Successors from %s: %s", start_node, successors)
 
