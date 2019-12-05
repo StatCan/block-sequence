@@ -382,6 +382,85 @@ class EdgeOrder:
         return unseen_connections
 
 
+    def _find_start_path(self, G):
+        """Return a suitable starting vertex for an Eulerian path.
+
+        This is a backport of the method in networkx 2.4. Only undirected MultiGraphs as supported by this backport.
+        """
+
+        if not self._has_eulerian_path(G):
+            return None
+
+        if nx.is_eulerian(G):
+            return nx.utils.arbitrary_element(G)
+
+        # randomly choose one of the possibilities
+        start = [v for v in G if G.degree(v) % 2 != 0][0]
+        return start
+
+    def _is_semieulerian(self, G):
+        """Return True if a graph is semi-Eulerian.
+
+        A graph is semi-Eulerian if it has an Eulerian path but no Eulerian circuit.
+
+        This is a backport of the method in networkx 2.4, since we don't have that version at the moment.
+        """
+
+        return self._has_eulerian_path(G) and not nx.is_eulerian(G)
+
+
+    def _has_eulerian_path(self, G):
+        """Return True if G has an Eulerian path.
+
+        An Eulerian path is a path in a graph which uses each edge of a graph exactly once.
+
+        This is a backport of a method in networkx 2.4, and is only implemented for undirected graphs in this port.
+
+        Parameters
+        ----------
+        G: Networkx undirected Graph
+           The graph to find an euler path in.
+
+        Returns
+        -------
+        Bool: True if G has an eulerian path.
+        """
+
+        return (sum(d % 2 == 1 for v, d in G.degree()) in (0, 2) and nx.is_connected(G))
+
+
+    def _eulerian_path(self, G, source=None):
+        """Return an iterator over the edges of an Eulerian path in G.
+
+        This is a backport of a method in networkx 2.4, and is only implemented for undirected MultiGraphs in this port.
+
+        Parameters
+        ----------
+        G: NetworkX graph
+           The graph in which to look for an eulerian path.
+        source: node
+            The node at which to start the search.
+
+        Yields
+        ------
+        Edge tuples along the eulerian path.
+        """
+
+        # protect against graphs with no possible path
+        if not self._has_eulerian_path(G):
+            raise nx.NetworkXError("Graph has no Eulerian paths.")
+
+        # make a copy of the graph
+        GC = G.copy()
+
+        if source is None:
+            source = self._find_start_path(GC)
+
+        # traverse the edges using the networkx internal multigraph eulerian process
+        for u, v, k in nx.algorithms.euler._multigraph_eulerian_circuit(GC, source):
+            yield u, v, k
+
+
     def label_all_edges(self):
         logging.info("Labelling all edges recursively.")
         for comp in sorted(nx.connected_components(self.graph), key=len, reverse=True):
@@ -390,6 +469,21 @@ class EdgeOrder:
 
             successors = nx.dfs_successors(graph_component, start_node)
             logging.debug("Successors from %s: %s", start_node, successors)
+
+            # check if a eulerian path can be produced
+            if self._has_eulerian_path(graph_component):
+                logging.debug("Component has eulerian path. Labelling with that.")
+                try:
+                    for u,v,k in self._eulerian_path(graph_component, start_node):
+                        self._apply_sequence_to_edge(u, v, k)
+                except:
+                    # sometimes picking the start point ourselves doesn't end up in a spot that can produce a good path,
+                    # so we let it pick its own.
+                    for u,v,k in self._eulerian_path(graph_component):
+                        self._apply_sequence_to_edge(u, v, k)
+
+                # component is fully processed. Move on to next one
+                continue
 
             # sometimes a block is nothing but a self referencing arc, so it has no successors
             if not successors:
