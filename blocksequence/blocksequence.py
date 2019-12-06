@@ -474,9 +474,6 @@ class EdgeOrder:
                     self._apply_sequence_to_edge(u,v,k)
                 continue
 
-            successors = nx.dfs_successors(graph_component, start_node)
-            logging.debug("Successors from %s: %s", start_node, successors)
-
             # check if a eulerian path can be produced
             if self._has_eulerian_path(graph_component):
                 logging.debug("Component has eulerian path. Labelling with that.")
@@ -491,6 +488,9 @@ class EdgeOrder:
 
                 # component is fully processed. Move on to next one
                 continue
+
+            successors = nx.dfs_successors(graph_component, start_node)
+            logging.debug("Successors from %s: %s", start_node, successors)
 
             # sometimes a block is nothing but a self referencing arc, so it has no successors
             if not successors:
