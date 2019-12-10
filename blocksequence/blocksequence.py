@@ -468,6 +468,7 @@ class EdgeOrder:
             start_node = self._get_start_node_for_first_edge(graph_component)
 
             # try to route a eulerian circuit as the simplest solution before trying anything else
+            # Eulerian circuits mean that there is a route back to the start point.
             if nx.is_eulerian(graph_component):
                 logging.debug("Graph is eulerian. Labelling as eulerian circuit.")
                 for u,v,k in nx.eulerian_circuit(graph_component, source=start_node, keys=True):
@@ -475,6 +476,7 @@ class EdgeOrder:
                 continue
 
             # check if a eulerian path can be produced
+            # Since not all blocks have a route back to the start point, try to use a Eulerian path instead.
             if self._has_eulerian_path(graph_component):
                 logging.debug("Component has eulerian path. Labelling with that.")
                 try:
