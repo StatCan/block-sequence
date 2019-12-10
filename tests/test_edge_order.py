@@ -1,5 +1,6 @@
 import logging
 import networkx as nx
+import pprint
 
 from blocksequence.blocksequence import EdgeOrder
 
@@ -433,5 +434,39 @@ def test_internal_lollipop(caplog):
     # the labels that should have been produced
     expected = {(0, 1, 0): 9, (0, 4, 0): 1, (1, 2, 0): 8, (2, 3, 0): 7, (3, 4, 0): 2,
                 (3, 5, 0): 6, (3, 5, 1): 3, (5, 5, 0): 5, (5, 5, 1): 4}
+
+    assert labels == expected
+
+
+def test_internal_connections_with_cutout(caplog):
+    """Test that a block is successfully traversed when it has an interior cutout along one of its internal arcs."""
+
+    # capture debug logs on failures
+    caplog.set_level(logging.DEBUG)
+
+    # create the graph
+    g = nx.cycle_graph(16, create_using=nx.MultiGraph)
+    # add the internal arcs
+    g.add_edges_from([(1, 4), (4, 1)])
+    g.add_edges_from([(6, 18), (18, 6), (9, 18), (18, 9), (18, 13), (13, 18)])
+    g.add_edges_from([(5, 17), (17, 5), (15, 16), (16, 15), (16, 17)])
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1}
+    nx.set_edge_attributes(g, seq, 'sequence')
+    nx.set_edge_attributes(g, 'manual', 'defined')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    pprint.pprint(dict(sorted(labels.items(), key=lambda t: t[1])))
+
+    # labels that should have been produced
+    expected = {(0, 15, 0): 1, (15, 16, 1): 2, (15, 16, 0): 3, (17, 16, 0): 4, (5, 17, 1): 5, (5, 6, 0): 6, 
+                (6, 18, 1): 7, (13, 18, 1): 8, (13, 18, 0): 9, (9, 18, 1): 10, (9, 18, 0): 11, (6, 18, 0): 12,
+                (6, 7, 0): 13, (7, 8, 0): 14, (8, 9, 0): 15, (9, 10, 0): 16, (10, 11, 0): 17, (11, 12, 0): 18,
+                (12, 13, 0): 19, (13, 14, 0): 20, (14, 15, 0): 21, (0, 1, 0): 22, (1, 4, 1): 23, (3, 4, 0): 24,
+                (2, 3, 0): 25, (1, 2, 0): 26, (1, 4, 0): 27, (4, 5, 0): 28, (5, 17, 0): 29}
 
     assert labels == expected
