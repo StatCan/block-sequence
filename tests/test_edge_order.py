@@ -454,7 +454,6 @@ def test_internal_connections_with_cutout(caplog):
     # edge order is going to look for a sequence field to determine the start node
     seq = {(0, 1, 0): 0, (1, 2, 0): 1}
     nx.set_edge_attributes(g, seq, 'sequence')
-    nx.set_edge_attributes(g, 'manual', 'defined')
 
     # initialize the edge order and get the labels
     eo = EdgeOrder(g)
@@ -469,4 +468,48 @@ def test_internal_connections_with_cutout(caplog):
                 (12, 13, 0): 19, (13, 14, 0): 20, (14, 15, 0): 21, (0, 1, 0): 22, (1, 4, 1): 23, (3, 4, 0): 24,
                 (2, 3, 0): 25, (1, 2, 0): 26, (1, 4, 0): 27, (4, 5, 0): 28, (5, 17, 0): 29}
 
+    assert labels == expected
+
+
+def test_complicated_internal_arcs(caplog):
+    """Test an overly complicated internal arc structure within a block."""
+
+    # capture debug logs on failures
+    caplog.set_level(logging.DEBUG)
+
+    g = nx.cycle_graph(14, create_using=nx.MultiGraph)
+    # add internal arcs to form small squares in the block - these are all double sided
+    g.add_edges_from([(13, 14), (13, 14), (14, 1), (14, 1)])
+    g.add_edges_from([(15, 2), (15, 2), (4, 15), (4, 15)])
+    # add a separate set of arcs that significantly subdivide the orignal block
+    g.add_edges_from([(11, 16), (11, 16)])
+    g.add_edges_from([(16, 17), (16, 17)])
+    g.add_edges_from([(17, 5), (17, 5)])
+    g.add_edges_from([(9, 18), (9, 18)])
+    g.add_edges_from([(18, 16), (18, 16)])
+    g.add_edges_from([(17, 19), (17, 19)])
+    g.add_edges_from([(19, 8), (19, 8)])
+    g.add_edges_from([(18, 19), (18, 19)])
+    g.add_edges_from([(19, 6), (19, 6)])
+
+    # edge order is going to look for a sequence field to determine the start node
+    seq = {(0, 1, 0): 0, (1, 2, 0): 1}
+    nx.set_edge_attributes(g, seq, 'sequence')
+
+    # initialize the edge order and get the labels
+    eo = EdgeOrder(g)
+    labels = eo.label_all_edges()
+
+    pprint.pprint(sorted(labels.items(), key=lambda t: t[1]))
+
+    # labels that should have been produced
+    expected = {(0, 1, 0): 40, (0, 13, 0): 1, (1, 2, 0): 39, (1, 14, 0): 4, (1, 14, 1): 3, (2, 3, 0): 38,
+                (2, 15, 0): 35, (2, 15, 1): 34, (3, 4, 0): 37, (4, 5, 0): 32, (4, 15, 0): 36, (4, 15, 1): 33,
+                (5, 6, 0): 31, (5, 17, 0): 23, (5, 17, 1): 22, (6, 7, 0): 30, (6, 19, 0): 16, (6, 19, 1): 15,
+                (7, 8, 0): 29, (8, 9, 0): 28, (8, 19, 0): 14, (8, 19, 1): 13, (9, 10, 0): 27, (9, 18, 0): 19,
+                (9, 18, 1): 18, (10, 11, 0): 26, (11, 12, 0): 7, (11, 16, 0): 25, (11, 16, 1): 8, (12, 13, 0): 6,
+                (13, 14, 0): 5, (13, 14, 1): 2, (16, 17, 0): 24, (16, 17, 1): 21, (16, 18, 0): 20, (16, 18, 1): 9,
+                (17, 19, 0): 12, (17, 19, 1): 11, (18, 19, 0): 17, (18, 19, 1): 10}
+
+    assert len(labels) == len(g.edges)
     assert labels == expected
