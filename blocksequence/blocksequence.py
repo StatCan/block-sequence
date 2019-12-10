@@ -469,7 +469,7 @@ class EdgeOrder:
 
             # try to route a eulerian circuit as the simplest solution before trying anything else
             if nx.is_eulerian(graph_component):
-                logging.debug("Graph is eulerian. Labelling circuit.")
+                logging.debug("Graph is eulerian. Labelling as eulerian circuit.")
                 for u,v,k in nx.eulerian_circuit(graph_component, source=start_node, keys=True):
                     self._apply_sequence_to_edge(u,v,k)
                 continue
@@ -489,50 +489,28 @@ class EdgeOrder:
                 # component is fully processed. Move on to next one
                 continue
 
-            successors = nx.dfs_successors(graph_component, start_node)
-            logging.debug("Successors from %s: %s", start_node, successors)
+            # no eulerian path exists, so ask networkx to create one by filling in edges where necessary
+            # the new edges will need to be removed from the final output, but should let the system walk through an
+            # area
+            logging.debug("Non-eulerian graph is not traversable. Eulerizing it.")
+            euler_graph = nx.eulerize(graph_component)
+            logging.debug("New graph: %s", euler_graph.edges)
+            for u,v,k in self._eulerian_path(euler_graph):
+                # make sure this is a real block face before trying to apply a sequence value to it
+                if not euler_graph[u][v][k].get('bf_uid'):
+                    logging.debug("Augmented edge at (%s, %s, %s) found, not applying sequence number.", u, v, k)
+                    continue
 
-            # sometimes a block is nothing but a self referencing arc, so it has no successors
-            if not successors:
-                logging.debug("No successors found. This looks like a donut hole block.")
-                self._apply_sequence_to_edges(start_node, start_node)
-                # skip all other processing and move on to the next component
-                continue
+                self._apply_sequence_to_edge(u, v, k)
 
-            # more complicated structure, so work through the successors
-            for node in successors:
-                ends = successors[node]
+            # At this point every edge should be accounted for, but in case something somehow slips through the cracks
+            # it needs to be given a sequence label. The label almost certainly won't make much sense in terms of a
+            # logical ordering, but this is just trying to make sure it is counted.
+            for u, v, k in graph_component.edges:
+                if not graph_component[u][v][k].get(self._es_label):
+                    self._apply_sequence_to_edge(u, v, k)
 
-                self._label_from_node(node, successors)
-
-                # look for phantom successors from the start node
-                phantoms = self._phantom_successors(graph_component, node, ends)
-                for phantom_end in phantoms:
-                    self._apply_sequence_to_edges(node, phantom_end)
-
-            # the successors list thinks it is done, but there can be leftover edges
-            # that are part of the return connections
-
-            # get the last node to be sequenced
-            sorted_edges = sorted(nx.get_edge_attributes(graph_component, self._es_label).items(), key=lambda t: t[1])
-            logging.debug("Edges seen so far: %s", sorted_edges)
-            last_edge = sorted_edges[-1][0]
-            logging.debug("Last edge: %s", last_edge)
-            # get the edges connected to that last end node
-            u, v, k = last_edge
-            last_successors = dict(nx.bfs_successors(graph_component, source=v, depth_limit=3))
-            # remove the last edge, since it will be a duplicate
-            if u in last_successors[v]:
-                last_successors[v].remove(u)
-            logging.debug("Last successors: %s", last_successors)
-            # apply labels from the last node
-            self._label_from_node(v, last_successors)
-
-            # return edges on cyclic graphs aren't always seen, so check for those here
-            return_edges = graph_component.edges(nbunch=start_node)
-            for ru, rv in return_edges:
-                self._apply_sequence_to_edges(ru, rv)
-
+        # collect all the labels that were applied and return them
         labels = nx.get_edge_attributes(self.graph, self._es_label)
         logging.debug("Final labels: %s", labels)
         return labels
