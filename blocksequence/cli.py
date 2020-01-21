@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 
-from .blocksequence import BlockSequence
+from .sequencer import BlockSequence
 
 logger = logging.getLogger()
 click_log.basic_config(logger)

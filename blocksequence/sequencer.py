@@ -155,7 +155,7 @@ class BlockSequence:
         eo_seq = []
         for block, group in block_group:
             edge_graph = nx.from_pandas_edgelist(group,
-                                                 source='startnodenum', target='endnodenum',
+                                                 source=self.source_field, target=self.target_field,
                                                  edge_attr=True, create_using=nx.MultiGraph)
             eo = EdgeOrder(edge_graph)
             edge_labels = eo.label_all_edges()
@@ -296,7 +296,7 @@ class EdgeOrder:
         self._es_label = 'es'
 
         if not nx.is_connected(self.graph):
-            logging.info("Graph is disconnected. Edge order should be verified.")
+            logging.warning("Graph is disconnected. Edge order should be verified.")
 
 
     def _sort_edges_by_count(self, start: int, ends: list) -> list:
@@ -462,7 +462,7 @@ class EdgeOrder:
 
 
     def label_all_edges(self):
-        logging.info("Labelling all edges recursively.")
+        logging.debug("Labelling all edges recursively.")
         for comp in sorted(nx.connected_components(self.graph), key=len, reverse=True):
             graph_component = self.graph.subgraph(comp)
             start_node = self._get_start_node_for_first_edge(graph_component)

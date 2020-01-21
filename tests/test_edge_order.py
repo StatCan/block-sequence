@@ -2,7 +2,7 @@ import logging
 import networkx as nx
 import pprint
 
-from blocksequence.blocksequence import EdgeOrder
+from blocksequence.sequencer import EdgeOrder
 
 def path_works(graph, labels):
     # try to walk the graph using the labels
