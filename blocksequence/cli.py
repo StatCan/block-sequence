@@ -67,9 +67,12 @@ def create_edge_list(ctx, gpkg, parent_geography_uid_field, child_geography_uid_
   nodes, in this case.
   """
 
+  logger.debug("create_edge_list start")
+
   # sqlite path to the gpkg for pandas
   sqlite_conn = f'sqlite:///{gpkg}'
 
+  logger.debug("Reading source data from GPKG")
   # get each of the required layers as a dataframe
   edge_df = (pd.read_sql_table(edge_layer, sqlite_conn, coerce_float=False)
              .rename(columns=str.lower))
@@ -80,20 +83,24 @@ def create_edge_list(ctx, gpkg, parent_geography_uid_field, child_geography_uid_
               .drop('geometry', axis=1)
               .rename(columns=str.lower))
 
+  logger.debug("Merging source layers into single DataFrame")
   # merge all the dataframes together, creating a single dataframe to work from
   edge_gdf = (line_df.merge(edge_df, on='ngd_uid', sort=False)
               .merge(block_df, on=child_geography_uid_field.lower(), sort=False, copy=False))
 
+  logger.debug("Recording segment length as an attribute for future reference")
   # store the length of the lines for use as the weight field
   edge_gdf = edge_gdf.assign(length=lambda x: x.length)
 
   # clean up some memory
   del edge_df, line_df, block_df
 
+  logger.debug("Calculating start and end coordinates for each line segment")
   # use the line geometry to extract start and end x/y coordinates
   edge_gdf['start_node_x'], edge_gdf['start_node_y'] = np.vectorize(get_start_node)(edge_gdf['geometry'])
   edge_gdf['end_node_x'], edge_gdf['end_node_y'] = np.vectorize(get_end_node)(edge_gdf['geometry'])
 
+  logger.debug("Creating unique IDs for each coordinate pair")
   # generate IDs to use for the coordinates, instead of the coordinates themselves
   edge_gdf['start_node'] = list(zip(edge_gdf['start_node_x'], edge_gdf['start_node_y']))
   edge_gdf['end_node'] = list(zip(edge_gdf['end_node_x'], edge_gdf['end_node_y']))
@@ -106,10 +113,13 @@ def create_edge_list(ctx, gpkg, parent_geography_uid_field, child_geography_uid_
   edge_gdf['end_node_id'] = edge_gdf['end_node'].map(coord_lookup)
   edge_gdf = edge_gdf.drop(['start_node', 'end_node'], axis=1)
 
+  logger.debug("Saving output to destination database")
   # convert our GeoDataFrame to a normal dataframe to be written out
   edges = pd.DataFrame(edge_gdf.drop('geometry', axis=1))
   # write the data, overwriting anything that already exists
   edges.to_sql('edge_list', ctx.obj['dest_db'], if_exists='replace')
+
+  logger.debug("create_edge_list end")
 
 
 def get_start_node(line):
@@ -127,16 +137,23 @@ def get_end_node(line):
 @click.pass_context
 def sequence_blocks(ctx, parent_geography_uid_field, child_geography_uid_field):
 
+    logger.debug("sequence_blocks start")
+
+    logger.debug("Reading list of edges to sequence from the database")
     # load the edge list from the database
     edges = pd.read_sql_table('edge_list', ctx.obj['dest_db'])
 
+    logger.debug("Grouping edges by parent geography UID")
     # group the edges by the parent geography
     pgeo_group = edges.groupby(by=parent_geography_uid_field.lower(), sort=False)
     # iterate each geography, calculating a eulerian circuit and writing it to the database
     for group_id, group in pgeo_group:
+        logger.debug("Processing geography %s", group_id)
         bs = BlockSequence(group, 'start_node_id', 'end_node_id')
         bs_df = bs.eulerian_circuit(child_geography_uid_field.lower(), edge_field='bf_uid')
         bs_df.to_sql('sequence', ctx.obj['dest_db'], if_exists='append')
+
+    logger.debug("sequence_blocks end")
 
 # register the commands
 main.add_command(create_edge_list)
