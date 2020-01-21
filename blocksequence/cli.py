@@ -51,14 +51,13 @@ def main(ctx, outdb):
 
 @click.command()
 @click.argument('gpkg', envvar='SEQ_GPKG_PATH')
-@click.argument('parent_geography', envvar='SEQ_PARENT_LAYER')
 @click.argument('parent_geography_uid_field', envvar='SEQ_PARENT_UID')
 @click.argument('child_geography_uid_field', envvar='SEQ_CHILD_UID')
 @click.option('--edge_layer', default='BF', show_default=True)
 @click.option('--block_layer', default='LB', show_default=True)
 @click.option('--line_layer', default='NGD_AL', show_default=True)
 @click.pass_context
-def create_edge_list(ctx, gpkg, parent_geography, parent_geography_uid_field, child_geography_uid_field, edge_layer, block_layer, line_layer):
+def create_edge_list(ctx, gpkg, parent_geography_uid_field, child_geography_uid_field, edge_layer, block_layer, line_layer):
   """
   Create a listing of edges to be sequenced through the sequence command from the provided input tables.
 
@@ -123,11 +122,10 @@ def get_end_node(line):
 
 
 @click.command()
-@click.argument('parent_geography', envvar='SEQ_PARENT_LAYER')
 @click.argument('parent_geography_uid_field', envvar='SEQ_PARENT_UID')
 @click.argument('child_geography_uid_field', envvar='SEQ_CHILD_UID')
 @click.pass_context
-def sequence_blocks(ctx, parent_geography, parent_geography_uid_field, child_geography_uid_field):
+def sequence_blocks(ctx, parent_geography_uid_field, child_geography_uid_field):
 
     # load the edge list from the database
     edges = pd.read_sql_table('edge_list', ctx.obj['dest_db'])
