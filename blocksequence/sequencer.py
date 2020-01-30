@@ -14,6 +14,11 @@ class BlockSequence:
         self.target_field = target
         self.weight_field = weight
 
+        logging.debug("Received %s edges", len(self.edges))
+        logging.debug("Source column: %s", self.source_field)
+        logging.debug("Target column: %s", self.target_field)
+        logging.debug("Weight field: %s", self.weight_field)
+
         # the type of graph to be used in generating the sequence
         self.graph_type = nx.MultiGraph
 
@@ -50,8 +55,11 @@ class BlockSequence:
     def eulerian_circuit(self, block_field, drop_augmented=True, edge_field='', boundary_attr=None):
         """Produce a eulerian circuit through the edge list, providing both a block and edge order."""
 
+        logging.debug("Producing Eulerian circuits grouped by %s", block_field)
+
         # empty graphs cannot be eulerian, so just return an empty dataframe
         if self._is_empty_graph():
+            logging.warning("The graph is empty. Returning an empty DataFrame.")
             return pd.DataFrame()
 
         # graphs can be disconnected, so cycle over the components from largest to smallest
@@ -63,12 +71,14 @@ class BlockSequence:
             circuit = self._component_circuit(subgraph, boundary_attr)
             # append it to the list of components to be given a block and edge order
             all_components.append(circuit)
+        logging.debug("Created circuits for %s components", len(all_components))
 
         # turn all the component dataframes into a single dataframe
         edge_sequence = pd.concat(all_components, sort=False, ignore_index=True)
 
         # remove any augmented edges, if the desired
         if drop_augmented:
+            logging.debug("Removing augmented edges from the output")
             edge_sequence = edge_sequence.drop_duplicates(edge_field)
 
         # calculate the block and edge order
@@ -83,6 +93,8 @@ class BlockSequence:
         Where a proper eulerian circuit cannot be calculated, augmented edges are added to allow for a complete
         circuit.
         """
+
+        logging.debug("Creating circuit from graph with %s edges and % nodes", graph.size(), len(graph))
 
         # find nodes of odd degree
         nodes_odd_degree = [v for v, d in graph.degree() if d % 2 == 1]
@@ -144,6 +156,8 @@ class BlockSequence:
         The dataframe is grouped by the group_field to calculate the order, but will not be sorted. It must be sorted
         before being passed in.
         """
+
+        logging.debug("Calculating block order grouped by %s", group_field)
 
         # group the data based on the supplied field
         block_group = df.groupby(group_field, sort=False)
