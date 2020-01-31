@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+from pandas.api.types import CategoricalDtype
 import sqlalchemy as sa
 
 from .sequencer import BlockSequence
@@ -143,12 +144,20 @@ def sequence_blocks(ctx, parent_geography_uid_field, child_geography_uid_field):
     # load the edge list from the database
     edges = pd.read_sql_table('edge_list', ctx.obj['dest_db'])
 
+    # set the arc_side to a categorical and sort to prefer right hand first
+    side_cat = CategoricalDtype(categories=['R','L'], ordered=True)
+    edges['arc_side'] = edges['arc_side'].astype(side_cat)
+
     logger.debug("Grouping edges by parent geography UID")
     # group the edges by the parent geography
     pgeo_group = edges.groupby(by=parent_geography_uid_field.lower(), sort=False)
     # iterate each geography, calculating a eulerian circuit and writing it to the database
     for group_id, group in pgeo_group:
         logger.debug("Processing geography %s", group_id)
+
+        # sort the data to put right hand side edges first
+        group = group.sort_values(by='arc_side')
+
         bs = BlockSequence(group, 'start_node_id', 'end_node_id')
         bs_df = bs.eulerian_circuit(child_geography_uid_field.lower(), edge_field='bf_uid')
         bs_df.to_sql('sequence', ctx.obj['dest_db'], if_exists='append')
