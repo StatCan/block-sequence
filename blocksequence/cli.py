@@ -11,7 +11,7 @@ from pathlib import Path
 from shapely.ops import linemerge
 import sqlalchemy as sa
 
-from .algorithms import *
+from .algorithms import EdgeOrder, BlockOrder
 
 logger = logging.getLogger()
 click_log.basic_config(logger)
