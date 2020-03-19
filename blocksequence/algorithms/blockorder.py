@@ -22,7 +22,7 @@ class BlockOrder:
     Inspired by https://gist.github.com/turbofart/3428880
     """
 
-    def __init__(self, block_data, cgeo_attr, max_evolution_count=150):
+    def __init__(self, block_data, cgeo_attr, x_field, y_field, block_order_field_name = 'block_order', max_evolution_count=150):
         """Initialize the object
 
         Parameters
@@ -32,6 +32,12 @@ class BlockOrder:
 
         cgeo_attr : String
             The name of the field in block_data containing the UID value
+        
+        x_field : String
+            The name of the field that contains the X value of the block representative point.
+        
+        y_field : String
+            The name of the field that contains the Y value of the block representative point.
 
         max_evolution_count : Integer, 150
             The maximum number of evolutions to try before returning a result.
@@ -43,7 +49,10 @@ class BlockOrder:
         self.cgeo_attr = cgeo_attr
         self.max_evolution_count = max_evolution_count
 
-        self.bo_name = 'block_order'
+        self.x_field = x_field
+        self.y_field = y_field
+
+        self.bo_name = block_order_field_name
 
         # Create a new tour manager to hold all the possible tours for this set of blocks
         self.tourmanager = TourManager()
@@ -60,7 +69,7 @@ class BlockOrder:
 
         logger.debug("Adding each block to tour manager")
         for index, point in self.block_data.iterrows():
-            block_rep = Block(point[self.cgeo_attr], point['rep_point_x'], point['rep_point_y'])
+            block_rep = Block(point[self.cgeo_attr], point[self.x_field], point[self.y_field])
             # logger.debug("Adding block %s to tour manager", block_rep)
             self.tourmanager.add_block(block_rep)
 

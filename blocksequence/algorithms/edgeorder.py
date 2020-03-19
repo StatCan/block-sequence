@@ -21,7 +21,9 @@ class EdgeOrder:
     traverse on the road arcs that form the edges in a block graph.
     """
 
-    def __init__(self, pgeo_edges, source='source', target='target', weight='length', anomalies_path=None):
+    def __init__(self, pgeo_edges, source='source', target='target', weight='length', anomalies_path=None, 
+        eo_field_name='edge_order', interior_edge_flag='interior_flag', block_order_field='block_order',
+        edge_uid_field='edge_uid', leftrightflag_field='leftrightflag', struid_field='struid'):
         """Initialize the sequencer with a DataFrame representing the edges in a parent geography.
 
         This will create a MultiGraph from the input edges that can be sequenced later.
@@ -51,6 +53,11 @@ class EdgeOrder:
         self.target_field = target
         self.weight_field = weight
 
+        self.block_order_field = block_order_field
+        self.edge_uid_field = edge_uid_field
+        self.leftrightflag_field = leftrightflag_field
+        self.struid_field = struid_field
+
         self.anomaly_folder = anomalies_path
 
         logger.debug("Received %s edges", len(self.edges))
@@ -62,11 +69,12 @@ class EdgeOrder:
         self.graph_type = nx.MultiDiGraph
 
         # field names to use on the outputs
-        self.eo_name = 'edge_order'
+        self.eo_name = eo_field_name
+        self.path_indicator = 'path_type'
 
         # names for attributes used to track internal workings
         self.node_weight_attr = 'weight'
-        self.node_interior_edge_attr = 'interior'
+        self.node_interior_edge_attr = interior_edge_flag
 
         # initialize the graph
         self.graph = self._create_graph()
@@ -133,7 +141,7 @@ class EdgeOrder:
 
         # Get the block IDs by chosen order.
         logger.debug("Processing edges based on the chosen block order")
-        block_order = self.edges.sort_values('block_order')[cgeo_attr].unique()
+        block_order = self.edges.sort_values(self.block_order_field)[cgeo_attr].unique()
         logger.debug("Block order: %s", block_order)
 
         # Group the edge listing by the child geography (blocks) so that each can be enumerated independently.
@@ -147,12 +155,12 @@ class EdgeOrder:
             seq_edges = self._order_edges_in_block(block_edges, drop_augmented)
 
             # Check that the results of edge ordering align with the number of total edges in the block.
-            if len(block_edges) < seq_edges['edge_order'].max():
+            if len(block_edges) < seq_edges[self.eo_name].max():
                 logging.critical("Edge order (%s) exceeds the number of edges (%s) in block %s",
-                                 seq_edges['edge_order'].max(), len(block_edges), block_id)
-            elif len(block_edges) > seq_edges['edge_order'].max():
+                                 seq_edges[self.eo_name].max(), len(block_edges), block_id)
+            elif len(block_edges) > seq_edges[self.eo_name].max():
                 logging.critical("Edge order (%s) is less than the number of edges (%s) in block %s",
-                                 seq_edges['edge_order'].max(), len(block_edges), block_id)
+                                 seq_edges[self.eo_name].max(), len(block_edges), block_id)
             else:
                 logging.debug("Edge count matches order values in block %s", block_id)
 
@@ -165,7 +173,8 @@ class EdgeOrder:
         # Merge all the results into a single dataframe and put the resulting order onto the initially provided data.
         logger.debug("Merging edge order onto supplied edge list")
         eo_df = pd.concat(results)
-        self.edges = self.edges.merge(eo_df[['bf_uid', self.eo_name, 'path_type']], how='left', on='bf_uid')
+        self.edges = self.edges.merge(eo_df[[self.edge_uid_field, self.eo_name, 'path_type']], how='left', 
+                                    on=self.edge_uid_field)
 
         # Sanity check that the results aren't null
         if self.edges[self.eo_name].isnull().any():
@@ -196,7 +205,7 @@ class EdgeOrder:
         logger.debug("Received edge data of shape %s", block_data.shape)
         # Sort the DataFrame to load right hand arcs into NetworkX first.
         # Note that Eulerian paths work in reverse order.
-        block_data = block_data.sort_values('arc_side', ascending=False)
+        block_data = block_data.sort_values(self.leftrightflag_field, ascending=False)
         block_g = nx.from_pandas_edgelist(block_data, source=self.source_field, target=self.target_field,
                                           edge_attr=True, create_using=self.graph_type)
 
@@ -210,9 +219,9 @@ class EdgeOrder:
 
         # Scale nodes that are mid-segment by looking for duplicated ngd_str_uid values
         logger.debug("Looking for nodes that fall in the middle of a road segment")
-        block_data['same_ngd_str_uid'] = block_data.duplicated(subset=['ngd_str_uid'], keep=False)
-        mid_arc_start_nodes = set(block_data.loc[block_data['same_ngd_str_uid'] == True, 'startnodenum'])
-        mid_arc_end_nodes = set(block_data.loc[block_data['same_ngd_str_uid'] == True, 'endnodenum'])
+        block_data['same_ngd_str_uid'] = block_data.duplicated(subset=[self.struid_field], keep=False)
+        mid_arc_start_nodes = set(block_data.loc[block_data['same_ngd_str_uid'] == True, self.source_field])
+        mid_arc_end_nodes = set(block_data.loc[block_data['same_ngd_str_uid'] == True, self.target_field])
         mid_arc_nodes = mid_arc_start_nodes.intersection(mid_arc_end_nodes)
         if mid_arc_nodes:
             logger.debug("Found mid-segment nodes: %s", mid_arc_nodes)
@@ -222,7 +231,7 @@ class EdgeOrder:
         edge_sequence = 0
 
         # record what type of path was used to determine the circuit
-        path_indicator_name = 'path_type'
+        path_indicator_name = self.path_indicator
         path_indicator_edges = {}
 
         # blocks don't necessarily form fully connected graphs, so cycle through the components
@@ -319,7 +328,7 @@ class EdgeOrder:
                 # Send this data to the anomaly folder so that it can be investigated later. It could have addressable
                 # issues that operations can correct for the next run.
                 logger.debug("Writing anomaly set for this block")
-                bf_uid_set = list(nx.get_edge_attributes(block_g_comp, 'bf_uid').values()).pop()
+                bf_uid_set = list(nx.get_edge_attributes(block_g_comp, self.edge_uid_field).values()).pop()
                 anomaly_file_name = f"anomaly_block_component.{bf_uid_set}.yaml"
                 nx.write_yaml(block_g_comp, (self.anomaly_folder / anomaly_file_name).as_posix())
 
@@ -345,7 +354,7 @@ class EdgeOrder:
                 logger.debug("Generating path through augmented block")
                 for u, v, k in nx.eulerian_circuit(euler_block, preferred_sp, keys=True):
                     # augmented edges have no attributes, so look for one and skip the edge if nothing is returned
-                    if drop_augmented and not euler_block.edges[u, v, k].get('bf_uid'):
+                    if drop_augmented and not euler_block.edges[u, v, k].get(self.edge_uid_field):
                         logger.debug("Ignoring augmented edge (%s, %s, %s)", u, v, k)
                         continue
 
