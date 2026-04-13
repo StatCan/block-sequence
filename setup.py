@@ -20,7 +20,7 @@ setup(name='blocksequence',
     "numpy == 1.16.1",
     "pandas == 0.23.4",
     "pyproj == 1.9.6",
-    "pytest == 4.0.1",
+    "pytest == 9.0.3",
     "Shapely == 1.6.4.post2",
   ],
   entry_points={
